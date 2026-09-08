@@ -2,14 +2,24 @@
 <html lang="lt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>World Driver — Lietuva</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<div id="map"></div>
+<!-- Oversized, rotatable map layer clipped by a fixed viewport, so the
+     screen can always show "forward = up" (heading-up camera). -->
+<div id="map-viewport">
+  <div id="map"></div>
+</div>
+
+<!-- Non-rotated OSM attribution (required by the ODbL license), kept
+     outside the rotating #map element so it always stays upright/readable. -->
+<div id="osm-attribution">
+  © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
+</div>
 
 <!-- First-person hands HUD (walking mode) -->
 <div id="hands-hud" class="hidden">
@@ -28,16 +38,30 @@
 <!-- Top info bar -->
 <div id="topbar">
   <span id="mode-label">Vaikščiojimas</span>
-  <span id="help-label">WASD/rodyklės — judėti · E — įlipti/išlipti</span>
+  <span id="help-label">Judėti · veiksmas</span>
+</div>
+
+<!-- On-screen touch controls (also usable with a mouse on desktop) -->
+<div id="touch-controls">
+  <div id="dpad">
+    <button id="btn-up" class="dpad-btn dpad-up" aria-label="Pirmyn">▲</button>
+    <button id="btn-left" class="dpad-btn dpad-left" aria-label="Kairėn">◀</button>
+    <button id="btn-right" class="dpad-btn dpad-right" aria-label="Dešinėn">▶</button>
+    <button id="btn-down" class="dpad-btn dpad-down" aria-label="Atgal">▼</button>
+  </div>
+  <button id="btn-action" aria-label="Veiksmas">E</button>
 </div>
 
 <!-- Intro overlay -->
 <div id="setup-overlay">
   <div class="setup-box">
     <h1>World Driver</h1>
-    <p>Žaidimas ant tikro Vilniaus žemėlapio (OpenStreetMap). Vaikščiok, priėjęs
-       prie bet kurios mašinos paspausk <b>E</b> ir vairuok — mieste nuolat važinėja eismas.</p>
-    <p><b>WASD / rodyklės</b> — judėti, vairuoti &nbsp;·&nbsp; <b>E</b> — įlipti / išlipti</p>
+    <p>Žaidimas ant tikro Vilniaus žemėlapio (OpenStreetMap), pirmo asmens vaizdu —
+       žemėlapis visada sukasi taip, kad tavo kryptis rodytų į viršų.</p>
+    <p>Vaikščiok, priėjęs prie bet kurios mašinos paspausk veiksmo mygtuką ir vairuok —
+       mieste nuolat važinėja eismas.</p>
+    <p><b>Kompiuteryje:</b> WASD/rodyklės — judėti, E — įlipti/išlipti<br>
+       <b>Telefone:</b> rodyklių mygtukai kairėje, veiksmo mygtukas dešinėje</p>
     <button id="start-btn">Žaisti</button>
   </div>
 </div>

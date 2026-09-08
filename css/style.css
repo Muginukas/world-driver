@@ -4,12 +4,49 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
   font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Heading-up rotating map ---------- */
+/* #map is deliberately oversized (sized in JS to the viewport's
+   diagonal) and rotated by the player's heading each frame, so the
+   world turns underneath a player who always faces "up" — the closest
+   a flat 2D tile map can get to a first-person driving/walking feel.
+   #map-viewport clips it back down to the actual screen size. */
+#map-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #1b1f24;
 }
 
 #map {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+#osm-attribution {
+  position: fixed;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  z-index: 26;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#osm-attribution a {
+  color: inherit;
+  pointer-events: auto;
 }
 
 .hidden {
@@ -41,7 +78,7 @@ html, body {
 /* ---------- Interaction prompt ---------- */
 #prompt {
   position: fixed;
-  bottom: 140px;
+  bottom: 210px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(20, 20, 20, 0.75);
@@ -56,24 +93,24 @@ html, body {
 /* ---------- Driving HUD ---------- */
 #drive-hud {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  top: 12px;
+  right: 12px;
   z-index: 20;
 }
 
 #speedometer {
   background: rgba(20, 20, 20, 0.7);
   color: #fff;
-  padding: 14px 20px;
-  border-radius: 12px;
-  font-size: 22px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 700;
-  min-width: 100px;
+  min-width: 70px;
   text-align: center;
 }
 
 #speed-value {
-  font-size: 30px;
+  font-size: 20px;
 }
 
 /* ---------- Hands HUD (walking) ---------- */
@@ -116,6 +153,78 @@ html, body {
 .hand-right.step-a { transform: rotate(-4deg) translateY(0); }
 .hand-right.step-b { transform: rotate(-14deg) translateY(-18px); }
 
+/* ---------- Touch controls ---------- */
+#touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none; /* let clicks fall through except on the buttons below */
+}
+
+#dpad {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 176px;
+  height: 176px;
+  display: grid;
+  grid-template-columns: 56px 56px 56px;
+  grid-template-rows: 56px 56px 56px;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.dpad-btn {
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dpad-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.dpad-up { grid-column: 2; grid-row: 1; }
+.dpad-left { grid-column: 1; grid-row: 2; }
+.dpad-right { grid-column: 3; grid-row: 2; }
+.dpad-down { grid-column: 2; grid-row: 3; }
+
+#btn-action {
+  position: fixed;
+  right: 20px;
+  bottom: 30px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(59, 130, 246, 0.85);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+
+#btn-action:active {
+  background: rgba(37, 99, 235, 0.95);
+}
+
+#btn-action.disabled {
+  opacity: 0.35;
+}
+
 /* ---------- Setup overlay ---------- */
 #setup-overlay {
   position: fixed;
@@ -129,11 +238,15 @@ html, body {
 }
 
 .setup-box {
+  width: 90vw;
   max-width: 420px;
-  padding: 28px 32px;
+  box-sizing: border-box;
+  padding: 24px 28px;
   background: #1c2430;
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .setup-box h1 {
