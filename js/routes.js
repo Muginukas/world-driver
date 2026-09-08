@@ -1,7 +1,12 @@
 // Traffic route definitions. Each route is an origin/destination pair
 // inside Vilnius; the actual driving path between them is resolved at
-// startup via the Directions API, so ambient traffic always follows
-// real, road-snapped streets rather than a straight line.
+// startup via the free OSRM public routing API, so ambient traffic
+// always follows real, road-snapped streets rather than a straight line.
+//
+// Note: router.project-osrm.org is OSRM's free public demo server —
+// fine for a hobby project like this, but it's rate-limited and not
+// meant for production/heavy traffic. Self-host OSRM if this ever needs
+// to scale.
 
 const LITHUANIA_CENTER = { lat: 54.6872, lng: 25.2797 }; // Vilnius, Lithuania
 const START_POSITION = { lat: 54.6870, lng: 25.2650 }; // near Lukiškės Square
@@ -25,38 +30,40 @@ const PARKED_CARS = [
   { lat: 54.6878, lng: 25.2638 },
 ];
 
-// Resolves every TRAFFIC_ROUTES entry into a dense array of LatLng points
-// (the real road-snapped path) using the Directions API.
-function resolveTrafficRoutes(callback) {
-  const directionsService = new google.maps.DirectionsService();
-  const resolved = [];
-  let pending = TRAFFIC_ROUTES.length;
+const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
-  if (pending === 0) {
-    callback(resolved);
-    return;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchRoutePath(route) {
+  const url = `${OSRM_BASE_URL}/${route.origin.lng},${route.origin.lat};${route.destination.lng},${route.destination.lat}?overview=full&geometries=geojson`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code === 'Ok' && data.routes && data.routes.length) {
+      return data.routes[0].geometry.coordinates.map(([lng, lat]) => ({ lat, lng }));
+    }
+    console.warn('OSRM returned no route, falling back to straight line', data);
+  } catch (err) {
+    console.warn('OSRM route fetch failed, falling back to straight line', err);
   }
 
-  TRAFFIC_ROUTES.forEach((route, idx) => {
-    directionsService.route(
-      {
-        origin: route.origin,
-        destination: route.destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === 'OK' && result.routes.length) {
-          resolved[idx] = result.routes[0].overview_path;
-        } else {
-          console.warn('Directions failed for route', idx, status, '- falling back to straight line');
-          resolved[idx] = [
-            new google.maps.LatLng(route.origin.lat, route.origin.lng),
-            new google.maps.LatLng(route.destination.lat, route.destination.lng),
-          ];
-        }
-        pending -= 1;
-        if (pending === 0) callback(resolved);
-      }
-    );
-  });
+  return [
+    { lat: route.origin.lat, lng: route.origin.lng },
+    { lat: route.destination.lat, lng: route.destination.lng },
+  ];
+}
+
+// Resolves every TRAFFIC_ROUTES entry into a dense array of {lat, lng}
+// points (the real road-snapped path). Requests are staggered slightly
+// to be polite to the free public OSRM server.
+async function resolveTrafficRoutes(callback) {
+  const resolved = [];
+  for (let i = 0; i < TRAFFIC_ROUTES.length; i++) {
+    resolved[i] = await fetchRoutePath(TRAFFIC_ROUTES[i]);
+    if (i < TRAFFIC_ROUTES.length - 1) await sleep(250);
+  }
+  callback(resolved);
 }

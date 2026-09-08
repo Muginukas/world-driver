@@ -1,26 +1,35 @@
-// Entry point. `initGame` is invoked by the Maps JS API script tag
-// (see config.js) once google.maps is ready.
+// Entry point. Called once the player dismisses the intro overlay
+// (Leaflet is already loaded by then via a plain, synchronous <script>
+// tag in index.html, so `L` is available with no callback dance needed).
 
 const pressedKeys = new Set();
 let map, player, traffic;
 let lastFrameTime = null;
 
 function initGame() {
-  map = new google.maps.Map(document.getElementById('map'), {
-    center: LITHUANIA_CENTER,
+  map = L.map('map', {
+    center: [LITHUANIA_CENTER.lat, LITHUANIA_CENTER.lng],
     zoom: 18,
-    tilt: 0,
-    disableDefaultUI: true,
-    clickableIcons: false,
+    maxZoom: 19,
+    zoomControl: false,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false,
+    attributionControl: true,
   });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
 
   HUD.init();
   HUD.setMode(false);
 
   player = new Player(map, START_POSITION);
   traffic = new TrafficManager(map);
-
-  map.setCenter(player.currentPosition);
 
   resolveTrafficRoutes((paths) => {
     traffic.init(paths, PARKED_CARS);
@@ -89,8 +98,16 @@ function tick(now) {
     HUD.updateWalkingHands(dt, player.isMoving);
   }
 
-  map.setCenter(player.currentPosition);
+  const pos = player.currentPosition;
+  map.panTo([pos.lat, pos.lng], { animate: false });
   updatePrompt();
 
   requestAnimationFrame(tick);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('setup-overlay').classList.add('hidden');
+    initGame();
+  });
+});

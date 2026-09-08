@@ -4,33 +4,29 @@
 
 const WALK_SPEED_MPS = 1.4; // average human walking speed
 
-// Built lazily (not at script-parse time) since `google` isn't defined
-// until the Maps JS API script has finished loading.
-function playerSymbol() {
-  return {
-    path: google.maps.SymbolPath.CIRCLE,
-    fillColor: '#2b6fff',
-    fillOpacity: 1,
-    strokeColor: '#ffffff',
-    strokeWeight: 2,
-    scale: 7,
-  };
+// Built lazily (not at script-parse time) since `L` isn't defined until
+// the Leaflet <script> tag has run.
+function playerIcon() {
+  return L.divIcon({
+    className: 'player-icon',
+    html: '<div class="player-body"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
 }
 
 class Player {
   constructor(map, startPos) {
     this.map = map;
-    this.position = new google.maps.LatLng(startPos.lat, startPos.lng);
+    this.position = { lat: startPos.lat, lng: startPos.lng };
     this.heading = 0;
     this.vehicle = null; // Vehicle instance while driving, else null
     this.isMoving = false;
 
-    this.marker = new google.maps.Marker({
-      position: this.position,
-      map,
-      icon: playerSymbol(),
-      zIndex: 10,
-    });
+    this.marker = L.marker([this.position.lat, this.position.lng], {
+      icon: playerIcon(),
+      zIndexOffset: 200,
+    }).addTo(map);
   }
 
   get isDriving() {
@@ -43,7 +39,7 @@ class Player {
 
   enterVehicle(vehicle) {
     this.vehicle = vehicle;
-    this.marker.setMap(null);
+    this.map.removeLayer(this.marker);
   }
 
   exitVehicle() {
@@ -52,8 +48,8 @@ class Player {
     // Step out beside the car rather than on top of it.
     this.position = Geo.offset(v.position, 3, v.heading + 90);
     this.heading = v.heading;
-    this.marker.setPosition(this.position);
-    this.marker.setMap(this.map);
+    this.marker.setLatLng([this.position.lat, this.position.lng]);
+    this.marker.addTo(this.map);
     return v;
   }
 
@@ -64,6 +60,6 @@ class Player {
 
     this.heading = heading;
     this.position = Geo.offset(this.position, WALK_SPEED_MPS * dt, heading);
-    this.marker.setPosition(this.position);
+    this.marker.setLatLng([this.position.lat, this.position.lng]);
   }
 }

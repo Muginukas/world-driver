@@ -12,25 +12,21 @@ const DRIVE_BRAKE = 10; // m/s^2
 const DRIVE_FRICTION = 3; // m/s^2 natural decel when coasting
 const DRIVE_TURN_RATE = 55; // deg/s at full speed
 
-function carSymbol(color, headingDeg) {
-  return {
-    path: 'M 0,-14 L 6,-6 L 6,12 L -6,12 L -6,-6 Z',
-    fillColor: color,
-    fillOpacity: 1,
-    strokeColor: '#1c1c1c',
-    strokeWeight: 1.5,
-    scale: 1.4,
-    rotation: headingDeg,
-    anchor: new google.maps.Point(0, 0),
-  };
+// Built lazily (not at script-parse time) since `L` isn't defined until
+// the Leaflet <script> tag has run.
+function carIcon(color) {
+  return L.divIcon({
+    className: 'car-icon',
+    html: `<div class="car-body" style="background:${color}"></div>`,
+    iconSize: [22, 34],
+    iconAnchor: [11, 17],
+  });
 }
 
 class Vehicle {
   constructor(map, position, color) {
     this.map = map;
-    this.position = position instanceof google.maps.LatLng
-      ? position
-      : new google.maps.LatLng(position.lat, position.lng);
+    this.position = { lat: position.lat, lng: position.lng };
     this.heading = 0;
     this.speed = 0; // signed, m/s (negative = reversing)
     this.color = color;
@@ -42,12 +38,10 @@ class Vehicle {
 
     this.driven = false; // true while the player is inside
 
-    this.marker = new google.maps.Marker({
-      position: this.position,
-      map,
-      icon: carSymbol(color, this.heading),
-      zIndex: 5,
-    });
+    this.marker = L.marker([this.position.lat, this.position.lng], {
+      icon: carIcon(color),
+      zIndexOffset: 100,
+    }).addTo(map);
   }
 
   setRoute(path, startIndex = 0) {
@@ -122,8 +116,10 @@ class Vehicle {
   }
 
   render() {
-    this.marker.setPosition(this.position);
-    this.marker.setIcon(carSymbol(this.color, this.heading));
+    this.marker.setLatLng([this.position.lat, this.position.lng]);
+    const el = this.marker.getElement();
+    const body = el && el.querySelector('.car-body');
+    if (body) body.style.transform = `rotate(${this.heading}deg)`;
   }
 
   get speedKmh() {
@@ -131,7 +127,7 @@ class Vehicle {
   }
 
   destroy() {
-    this.marker.setMap(null);
+    this.map.removeLayer(this.marker);
   }
 }
 

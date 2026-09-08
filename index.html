@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>World Driver — Lietuva</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -30,24 +31,23 @@
   <span id="help-label">WASD/rodyklės — judėti · E — įlipti/išlipti</span>
 </div>
 
-<!-- API key setup overlay -->
+<!-- Intro overlay -->
 <div id="setup-overlay">
   <div class="setup-box">
     <h1>World Driver</h1>
-    <p>Žaidimas naudoja Google Maps JavaScript API. Įvesk savo Google Maps API raktą
-       (su įjungtomis <b>Maps JavaScript API</b> ir <b>Directions API</b>), kad galėtum žaisti.</p>
-    <input id="api-key-input" type="text" placeholder="Google Maps API raktas" autocomplete="off">
-    <button id="start-btn">Pradėti žaidimą</button>
-    <p class="hint">Raktas saugomas tik tavo naršyklėje (localStorage), niekur nesiunčiamas.</p>
+    <p>Žaidimas ant tikro Vilniaus žemėlapio (OpenStreetMap). Vaikščiok, priėjęs
+       prie bet kurios mašinos paspausk <b>E</b> ir vairuok — mieste nuolat važinėja eismas.</p>
+    <p><b>WASD / rodyklės</b> — judėti, vairuoti &nbsp;·&nbsp; <b>E</b> — įlipti / išlipti</p>
+    <button id="start-btn">Žaisti</button>
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/routes.js"></script>
 <script src="js/vehicles.js"></script>
 <script src="js/player.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/main.js"></script>
-<script src="js/config.js"></script>
 </body>
 </html>
