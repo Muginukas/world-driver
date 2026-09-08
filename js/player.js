@@ -6,6 +6,8 @@
 
 const WALK_SPEED_MPS = 1.4; // average human walking speed
 const EYE_HEIGHT = 1.7;
+const DRIVE_EYE_HEIGHT = 1.15; // seated in the cabin, not standing above it
+const DRIVE_SEAT_FORWARD_OFFSET = 0.5; // toward the windshield, off the car's center
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
 function buildHandsViewmodel() {
@@ -29,17 +31,17 @@ function buildDashboard() {
   const group = new THREE.Group();
 
   const dash = new THREE.Mesh(
-    new THREE.BoxGeometry(1.2, 0.25, 0.3),
+    new THREE.BoxGeometry(1.3, 0.3, 0.35),
     new THREE.MeshLambertMaterial({ color: 0x222222 })
   );
-  dash.position.set(0, -0.5, -0.6);
+  dash.position.set(0, -0.35, -0.6);
   group.add(dash);
 
   const wheel = new THREE.Mesh(
     new THREE.TorusGeometry(0.22, 0.035, 8, 20),
     new THREE.MeshLambertMaterial({ color: 0x111111 })
   );
-  wheel.position.set(0, -0.35, -0.55);
+  wheel.position.set(0, -0.22, -0.55);
   wheel.rotation.x = Math.PI / 2.3;
   group.add(wheel);
 
@@ -70,18 +72,13 @@ class Player {
     return this.vehicle !== null;
   }
 
-  get currentPosition() {
-    return this.isDriving ? this.vehicle.position : this.position;
-  }
-
-  get currentHeading() {
-    return this.isDriving ? this.vehicle.heading : this.yaw;
-  }
-
   enterVehicle(vehicle) {
     this.vehicle = vehicle;
     this.hands.group.visible = false;
     this.dashboard.visible = true;
+    // Hide the car's own shell so nothing sits between the camera and
+    // the dashboard/world — the whole point of "being inside" it.
+    vehicle.mesh.visible = false;
   }
 
   exitVehicle() {
@@ -94,6 +91,7 @@ class Player {
     this.pitch = 0;
     this.hands.group.visible = true;
     this.dashboard.visible = false;
+    v.mesh.visible = true;
     return v;
   }
 
@@ -135,10 +133,22 @@ class Player {
   }
 
   updateCamera() {
-    const pos = this.currentPosition;
-    this.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
     this.camera.rotation.order = 'YXZ';
-    this.camera.rotation.y = this.currentHeading;
-    this.camera.rotation.x = this.isDriving ? 0 : this.pitch;
+
+    if (this.isDriving) {
+      const v = this.vehicle;
+      const fwd = forwardVec(v.heading);
+      this.camera.position.set(
+        v.position.x + fwd.x * DRIVE_SEAT_FORWARD_OFFSET,
+        DRIVE_EYE_HEIGHT,
+        v.position.z + fwd.z * DRIVE_SEAT_FORWARD_OFFSET
+      );
+      this.camera.rotation.y = v.heading;
+      this.camera.rotation.x = 0;
+    } else {
+      this.camera.position.set(this.position.x, EYE_HEIGHT, this.position.z);
+      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.x = this.pitch;
+    }
   }
 }

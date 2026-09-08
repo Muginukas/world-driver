@@ -145,10 +145,13 @@ function bindLookZone() {
 }
 
 function handleInteract() {
+  const cockpitFrame = document.getElementById('cockpit-frame');
+
   if (player.isDriving) {
     const vehicle = player.exitVehicle();
     traffic.onVehicleExited(vehicle);
     HUD.setMode(false);
+    cockpitFrame.classList.add('hidden');
     camera.fov = WALK_FOV;
     camera.updateProjectionMatrix();
   } else {
@@ -157,6 +160,7 @@ function handleInteract() {
       player.enterVehicle(vehicle);
       traffic.onVehicleEntered(vehicle);
       HUD.setMode(true);
+      cockpitFrame.classList.remove('hidden');
       camera.fov = DRIVE_FOV;
       camera.updateProjectionMatrix();
     }
@@ -211,6 +215,10 @@ function tick(now) {
     player.vehicle.updateDriven(dt, pressedKeys);
     traffic.update(dt, player.vehicle);
     HUD.updateSpeed(player.vehicle.speedKmh);
+    // A bit of extra FOV at high speed sells how fast 1000 km/h actually is.
+    const speedFraction = Math.min(1, player.vehicle.speedKmh / 1000);
+    camera.fov = DRIVE_FOV + speedFraction * 35;
+    camera.updateProjectionMatrix();
   } else {
     player.updateWalking(dt, pressedKeys);
     traffic.update(dt, null);

@@ -8,11 +8,12 @@ const CAR_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 
 const NPC_SPEED_MPS = 8; // ~29 km/h ambient city traffic speed
 const ENTER_RADIUS_M = 6;
 
-const DRIVE_MAX_SPEED_MPS = 25; // ~90 km/h
-const DRIVE_ACCEL = 6; // m/s^2
-const DRIVE_BRAKE = 10; // m/s^2
-const DRIVE_FRICTION = 3; // m/s^2 natural decel when coasting
-const DRIVE_TURN_RATE = 1.0; // rad/s at full speed
+const DRIVE_MAX_SPEED_MPS = 1000 / 3.6; // 1000 km/h
+const DRIVE_ACCEL = 45; // m/s^2 - tuned so 1000 km/h is actually reachable
+const DRIVE_BRAKE = 70; // m/s^2
+const DRIVE_FRICTION = 8; // m/s^2 natural decel when coasting
+const DRIVE_TURN_RATE = 1.0; // rad/s at full steering authority
+const DRIVE_TURN_FULL_SPEED_MPS = 10; // speed at which steering reaches full authority (~36 km/h) - kept independent of the (now absurd) top speed so normal-speed handling doesn't get sluggish
 
 // Simple blocky "Roblox-style" car: a body box, a lighter cabin box, and
 // four dark wheel boxes. Modeled with its nose toward local -Z, matching
@@ -130,7 +131,7 @@ class Vehicle {
     this.speed = Math.max(-DRIVE_MAX_SPEED_MPS / 2, Math.min(DRIVE_MAX_SPEED_MPS, this.speed));
 
     if (Math.abs(this.speed) > 0.05) {
-      const turnFactor = Math.min(1, Math.abs(this.speed) / (DRIVE_MAX_SPEED_MPS * 0.4));
+      const turnFactor = Math.min(1, Math.abs(this.speed) / DRIVE_TURN_FULL_SPEED_MPS);
       const dir = this.speed >= 0 ? 1 : -1;
       if (left) this.heading += DRIVE_TURN_RATE * turnFactor * dir * dt;
       if (right) this.heading -= DRIVE_TURN_RATE * turnFactor * dir * dt;
