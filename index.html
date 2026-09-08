@@ -33,6 +33,11 @@
   <span id="help-label">Judėti · žvilgsnis · veiksmas</span>
 </div>
 
+<!-- Minimap frame (just a border — the actual top-down view is rendered
+     into this same rectangle of the WebGL canvas underneath, via a
+     scissored viewport in main.js) -->
+<div id="minimap-frame"></div>
+
 <!-- On-screen touch controls (also usable with a mouse on desktop) -->
 <div id="touch-controls">
   <div id="dpad">

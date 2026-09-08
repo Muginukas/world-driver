@@ -71,6 +71,20 @@ html, body {
   pointer-events: none;
 }
 
+/* ---------- Minimap ---------- */
+#minimap-frame {
+  position: fixed;
+  left: 12px;
+  top: 56px;
+  width: 140px;
+  height: 140px;
+  z-index: 20;
+  pointer-events: none;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
 /* ---------- Cockpit frame (driving) ---------- */
 #cockpit-frame {
   position: fixed;

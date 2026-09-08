@@ -4,6 +4,7 @@
 
 const pressedKeys = new Set();
 let renderer, scene, camera, player, traffic;
+let minimapCamera, playerMarker;
 let lastFrameTime = null;
 let pointerLocked = false;
 
@@ -13,9 +14,53 @@ const LOOK_SENSITIVITY = 0.0022; // mouse (pointer lock)
 const TOUCH_LOOK_SENSITIVITY = 0.005;
 const KEY_LOOK_RATE = 1.8; // rad/s, arrow-key look fallback
 
+// Minimap: rendered as a second pass into a small scissored viewport of
+// the same canvas, matching #minimap-frame's CSS position/size exactly.
+const MINIMAP_SIZE = 140; // CSS px, must match #minimap-frame in style.css
+const MINIMAP_MARGIN_LEFT = 12;
+const MINIMAP_MARGIN_TOP = 56;
+const MINIMAP_VIEW_HALF = 80; // metres shown from center to edge
+
+// A small marker representing the player on the minimap. Lives on
+// THREE layer 1 only, so the main first-person camera (layer 0) never
+// renders it, while the minimap camera (layers 0+1) always does.
+function buildPlayerMarker() {
+  const group = new THREE.Group();
+
+  const dot = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.6, 1.6, 0.4, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff3b30, depthTest: false })
+  );
+  group.add(dot);
+
+  const nose = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.4, 2.4),
+    new THREE.MeshBasicMaterial({ color: 0xff3b30, depthTest: false })
+  );
+  nose.position.set(0, 0, -1.7); // toward -Z = forward, matches heading 0
+  group.add(nose);
+
+  // renderOrder/layers must be set per-mesh, not just on the parent
+  // group: Three.js reads each renderable object's own value, not an
+  // inherited one.
+  group.traverse((obj) => {
+    obj.layers.set(1);
+    obj.renderOrder = 999;
+  });
+  return group;
+}
+
 function initGame() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 400);
+
+  minimapCamera = new THREE.OrthographicCamera(
+    -MINIMAP_VIEW_HALF, MINIMAP_VIEW_HALF, MINIMAP_VIEW_HALF, -MINIMAP_VIEW_HALF, 1, 500
+  );
+  minimapCamera.position.set(0, 150, 0);
+  minimapCamera.rotation.order = 'YXZ';
+  minimapCamera.rotation.x = -Math.PI / 2; // look straight down, fixed north-up
+  minimapCamera.layers.enable(1);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -26,6 +71,9 @@ function initGame() {
 
   player = new Player(camera, { x: 0, z: 0 });
   traffic = new TrafficManager(scene);
+
+  playerMarker = buildPlayerMarker();
+  scene.add(playerMarker);
 
   resolveTrafficRoutes((latLngPaths) => {
     const projected = latLngPaths.map((path) => path.map((p) => toLocal(START_POSITION, p)));
@@ -226,9 +274,38 @@ function tick(now) {
 
   player.updateCamera();
   updatePrompt();
+  updateMinimapMarker();
 
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);
   renderer.render(scene, camera);
+
+  renderMinimap();
+
   requestAnimationFrame(tick);
+}
+
+function updateMinimapMarker() {
+  const pos = player.isDriving ? player.vehicle.position : player.position;
+  const heading = player.isDriving ? player.vehicle.heading : player.yaw;
+
+  playerMarker.position.set(pos.x, 2, pos.z);
+  playerMarker.rotation.y = heading;
+
+  minimapCamera.position.x = pos.x;
+  minimapCamera.position.z = pos.z;
+}
+
+function renderMinimap() {
+  const dpr = renderer.getPixelRatio();
+  const size = MINIMAP_SIZE * dpr;
+  const x = MINIMAP_MARGIN_LEFT * dpr;
+  const y = renderer.domElement.height - MINIMAP_MARGIN_TOP * dpr - size; // CSS top -> WebGL bottom-left origin
+
+  renderer.setViewport(x, y, size, size);
+  renderer.setScissor(x, y, size, size);
+  renderer.setScissorTest(true);
+  renderer.render(scene, minimapCamera);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
