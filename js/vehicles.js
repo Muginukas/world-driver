@@ -1,35 +1,62 @@
 // Vehicle: either an ambient NPC car following a road-snapped path back
 // and forth ("constant traffic"), or a car under direct player control.
+// Positions/headings now live in local 3D meters (see geo.js), not
+// lat/lng — movement is plain vector math, no geodesy at runtime.
 
-const CAR_COLORS = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#e67e22', '#1abc9c'];
+const CAR_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 0x1abc9c];
 
 const NPC_SPEED_MPS = 8; // ~29 km/h ambient city traffic speed
-const ENTER_RADIUS_M = 14;
+const ENTER_RADIUS_M = 6;
 
 const DRIVE_MAX_SPEED_MPS = 25; // ~90 km/h
 const DRIVE_ACCEL = 6; // m/s^2
 const DRIVE_BRAKE = 10; // m/s^2
 const DRIVE_FRICTION = 3; // m/s^2 natural decel when coasting
-const DRIVE_TURN_RATE = 55; // deg/s at full speed
+const DRIVE_TURN_RATE = 1.0; // rad/s at full speed
 
-// Built lazily (not at script-parse time) since `L` isn't defined until
-// the Leaflet <script> tag has run.
-function carIcon(color) {
-  return L.divIcon({
-    className: 'car-icon',
-    html: `<div class="car-body" style="background:${color}"></div>`,
-    iconSize: [22, 34],
-    iconAnchor: [11, 17],
+// Simple blocky "Roblox-style" car: a body box, a lighter cabin box, and
+// four dark wheel boxes. Modeled with its nose toward local -Z, matching
+// forwardVec(0) — i.e. heading 0 means facing local -Z.
+function buildCarMesh(colorHex) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 0.9, 4),
+    new THREE.MeshLambertMaterial({ color: colorHex })
+  );
+  body.position.y = 0.55;
+  group.add(body);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 0.6, 2),
+    new THREE.MeshLambertMaterial({ color: 0xdfefff })
+  );
+  cabin.position.set(0, 1.15, -0.2);
+  group.add(cabin);
+
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const wheelGeo = new THREE.BoxGeometry(0.4, 0.4, 0.6);
+  [
+    [-0.95, 0.25, 1.3],
+    [0.95, 0.25, 1.3],
+    [-0.95, 0.25, -1.3],
+    [0.95, 0.25, -1.3],
+  ].forEach(([x, y, z]) => {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.position.set(x, y, z);
+    group.add(wheel);
   });
+
+  return group;
 }
 
 class Vehicle {
-  constructor(map, position, color) {
-    this.map = map;
-    this.position = { lat: position.lat, lng: position.lng };
+  constructor(scene, position, colorHex) {
+    this.scene = scene;
+    this.position = { x: position.x, z: position.z };
     this.heading = 0;
     this.speed = 0; // signed, m/s (negative = reversing)
-    this.color = color;
+    this.color = colorHex;
 
     // NPC route state (null when parked / player-controlled)
     this.route = null;
@@ -38,10 +65,9 @@ class Vehicle {
 
     this.driven = false; // true while the player is inside
 
-    this.marker = L.marker([this.position.lat, this.position.lng], {
-      icon: carIcon(color),
-      zIndexOffset: 100,
-    }).addTo(map);
+    this.mesh = buildCarMesh(colorHex);
+    scene.add(this.mesh);
+    this.render();
   }
 
   setRoute(path, startIndex = 0) {
@@ -50,8 +76,8 @@ class Vehicle {
     this.routeDir = 1;
     if (path.length > 1) {
       const next = path[this.routeIndex + 1] || path[this.routeIndex - 1];
-      this.position = path[this.routeIndex];
-      this.heading = next ? Geo.heading(this.position, next) : 0;
+      this.position = { x: path[this.routeIndex].x, z: path[this.routeIndex].z };
+      this.heading = next ? headingTo(this.position, next) : 0;
       if (!path[this.routeIndex + 1]) this.routeDir = -1; // started at the far end
     }
   }
@@ -67,15 +93,18 @@ class Vehicle {
       if (!target) return;
     }
 
-    const distToTarget = Geo.distance(this.position, target);
+    const dx = target.x - this.position.x;
+    const dz = target.z - this.position.z;
+    const dist = Math.hypot(dx, dz);
     const step = NPC_SPEED_MPS * dt;
-    this.heading = Geo.heading(this.position, target);
+    this.heading = headingTo(this.position, target);
 
-    if (step >= distToTarget) {
-      this.position = target;
+    if (step >= dist) {
+      this.position = { x: target.x, z: target.z };
       this.routeIndex += this.routeDir;
-    } else {
-      this.position = Geo.offset(this.position, step, this.heading);
+    } else if (dist > 0) {
+      this.position.x += (dx / dist) * step;
+      this.position.z += (dz / dist) * step;
     }
 
     this.render();
@@ -103,23 +132,22 @@ class Vehicle {
     if (Math.abs(this.speed) > 0.05) {
       const turnFactor = Math.min(1, Math.abs(this.speed) / (DRIVE_MAX_SPEED_MPS * 0.4));
       const dir = this.speed >= 0 ? 1 : -1;
-      if (left) this.heading -= DRIVE_TURN_RATE * turnFactor * dir * dt;
-      if (right) this.heading += DRIVE_TURN_RATE * turnFactor * dir * dt;
-      this.heading = (this.heading + 360) % 360;
+      if (left) this.heading += DRIVE_TURN_RATE * turnFactor * dir * dt;
+      if (right) this.heading -= DRIVE_TURN_RATE * turnFactor * dir * dt;
     }
 
     if (Math.abs(this.speed) > 0.001) {
-      this.position = Geo.offset(this.position, this.speed * dt, this.heading);
+      const fwd = forwardVec(this.heading);
+      this.position.x += fwd.x * this.speed * dt;
+      this.position.z += fwd.z * this.speed * dt;
     }
 
     this.render();
   }
 
   render() {
-    this.marker.setLatLng([this.position.lat, this.position.lng]);
-    const el = this.marker.getElement();
-    const body = el && el.querySelector('.car-body');
-    if (body) body.style.transform = `rotate(${this.heading}deg)`;
+    this.mesh.position.set(this.position.x, 0, this.position.z);
+    this.mesh.rotation.y = this.heading;
   }
 
   get speedKmh() {
@@ -127,7 +155,7 @@ class Vehicle {
   }
 
   destroy() {
-    this.map.removeLayer(this.marker);
+    this.scene.remove(this.mesh);
   }
 }
 
@@ -135,25 +163,24 @@ class Vehicle {
 // replacements so traffic density stays constant even as the player
 // hops between cars.
 class TrafficManager {
-  constructor(map) {
-    this.map = map;
+  constructor(scene) {
+    this.scene = scene;
     this.vehicles = [];
     this.pathsByRoute = [];
   }
 
-  init(resolvedPaths, parkedCarSpecs) {
-    this.pathsByRoute = resolvedPaths;
+  init(projectedPaths, parkedLocalPositions) {
+    this.pathsByRoute = projectedPaths;
 
-    resolvedPaths.forEach((path, routeIdx) => {
+    projectedPaths.forEach((path, routeIdx) => {
       for (let i = 0; i < CARS_PER_ROUTE; i++) {
         this.spawnOnRoute(routeIdx, i);
       }
     });
 
-    parkedCarSpecs.forEach((spec) => {
+    parkedLocalPositions.forEach((pos) => {
       const color = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
-      const v = new Vehicle(this.map, spec, color);
-      this.vehicles.push(v);
+      this.vehicles.push(new Vehicle(this.scene, pos, color));
     });
   }
 
@@ -163,7 +190,7 @@ class TrafficManager {
 
     const color = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
     const startIndex = Math.floor((offsetIndex / CARS_PER_ROUTE) * (path.length - 1));
-    const v = new Vehicle(this.map, path[startIndex], color);
+    const v = new Vehicle(this.scene, path[startIndex], color);
     v.setRoute(path, startIndex);
     v.sourceRoute = routeIdx;
     this.vehicles.push(v);
@@ -183,7 +210,7 @@ class TrafficManager {
     let bestDist = ENTER_RADIUS_M;
     for (const v of this.vehicles) {
       if (v.driven) continue;
-      const d = Geo.distance(pos, v.position);
+      const d = dist2D(pos, v.position);
       if (d <= bestDist) {
         best = v;
         bestDist = d;

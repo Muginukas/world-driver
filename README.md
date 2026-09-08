@@ -1,15 +1,18 @@
 # World Driver
 
-Naršyklės žaidimas ant tikro Vilniaus (Lietuva) žemėlapio — **be jokio API rakto ir
-mokesčių**, naudojant atvirą **OpenStreetMap** žemėlapį (per Leaflet.js) ir nemokamą
-**OSRM** maršrutų servisą tikroms, kelias atitinkančioms trasoms. Pritaikyta ir
-telefonui (jutiklinio ekrano mygtukai), ir pirmo asmens vaizdui — žemėlapis
-visada sukasi taip, kad tavo/mašinos kryptis rodytų tiesiai į viršų.
+Tikras 3D pirmo asmens naršyklės žaidimas, sekantis realų Vilniaus (Lietuva)
+gatvių tinklą — **be jokio API rakto ir mokesčių**. Renderiu naudojamas
+[Three.js](https://threejs.org/) (WebGL), o gatvių trasos gaunamos iš
+nemokamo **OSRM** maršrutų serviso pagal tikrus Vilniaus taškus. Pasaulis —
+blokinė, "Roblox" stiliaus grafika (plokšti spalvoti dėžučių pastatai,
+kampuoti automobiliai) ant to realaus gatvių tinklo, ne fotorealistiškas
+miestas.
 
-Vaikščioji po miestą (matai tik siūbuojančias rankas), gali priėjus prie **bet
-kurios** mašinos paspausti veiksmo mygtuką ir į ją įlipti, o mieste nuolat, be
-sustojimo, važinėja fonininis eismas — automobiliai realiais keliais, kurie
-sukasi į priekį ir atgal be galo.
+Vaikščioji pirmuoju asmeniu (matai savo siūbuojančias rankas), gali priėjus
+prie **bet kurios** mašinos paspausti veiksmo mygtuką ir į ją įlipti
+(vaizdas pereina į vairuotojo vietą su prietaisų skydeliu/vairu), o mieste
+nuolat, be sustojimo, važinėja fonininis eismas — automobiliai realiais
+keliais, kurie sukasi į priekį ir atgal be galo.
 
 ## Kaip paleisti
 
@@ -29,78 +32,78 @@ per lokalų serverį.)
 
 ## Valdymas
 
-| Įrenginys | Veiksmas |
-|---|---|
-| Kompiuteris | `W A S D` / rodyklės — judėti / vairuoti · `E` — įlipti/išlipti |
-| Telefonas / lietimas | Rodyklių mygtukai kairiame apatiniame kampe — judėti / vairuoti · didelis apskritas mygtukas dešiniame apatiniame kampe — įlipti/išlipti |
+| Įrenginys | Judėjimas | Žvilgsnis | Veiksmas |
+|---|---|---|---|
+| Kompiuteris | `W A S D` — pirmyn/atgal/į šoną (vairuojant: greitis/posūkiai) | Pelė (spustelėk ekraną, kad "užrakintų" pelę) arba rodyklės | `E` |
+| Telefonas / lietimas | Rodyklių mygtukai kairiame apatiniame kampe | Brauk pirštu bet kur ekrane | Didelis apskritas mygtukas dešiniame apatiniame kampe |
 
 Jutiklinio ekrano mygtukai tiesiog paspaudžia/atleidžia tuos pačius klavišus,
 kuriuos naudoja klaviatūra — todėl visa judėjimo/vairavimo logika veikia
-identiškai, nepriklausomai nuo įvesties būdo.
+identiškai, nepriklausomai nuo įvesties būdo. Žvilgsnis (pelė/pirštas/rodyklės)
+sukioja kamerą nepriklausomai nuo judėjimo krypties — tikras pirmo asmens
+valdymas, ne senasis "žemėlapis sukasi" sprendimas.
 
-## Pirmo asmens ("heading-up") kamera
-
-Kadangi žemėlapis yra plokščios 2D plytelės (ne 3D pasaulis), tikras pirmo
-asmens (akių lygio) vaizdas nėra galimas be sudėtingo 3D variklio. Vietoj to
-naudojamas GPS/navigacijos programose paplitęs sprendimas: visas žemėlapis
-sukamas ekrane taip, kad žaidėjo (ar mašinos) kryptis visada rodytų į viršų —
-todėl vaizdas jaučiasi kaip "žiūrėjimas į priekį", o ne žiūrėjimas iš viršaus.
-Kamera papildomai pasukta žiūrėti į priekį (žaidėjas/mašina laikoma arčiau
-ekrano apačios), kad matytum daugiau to, kas laukia priekyje.
-
-Techniškai: `#map` elementas yra padarytas didesnis nei ekranas (iki jo
-įstrižainės dydžio) ir kiekvieną kadrą pasukamas per CSS `transform: rotate()`
-priešinga žaidėjo kryptimi; `#map-viewport` aplink jį nukirpimo (`overflow:
-hidden`) rėmeliu palieka matomą tik tikrą ekrano dydį.
+Vairuojant kamera užrakinta į mašinos kryptį (žiūri tiesiai pro priekinį
+stiklą) — laisvas apsižvalgymas vairuojant kol kas neįgyvendintas.
 
 ## Architektūra
 
-- `index.html`, `css/style.css` — puslapio karkasas, HUD, jutiklinio ekrano
-  valdymo mygtukai ir žemėlapio žymeklių (Leaflet divIcon) stilius.
-- `js/geo.js` — savarankiška (be bibliotekų priklausomybių) sferinė geometrija:
-  atstumas, azimutas, poslinkis pagal atstumą+kryptį (haversine formulos) ant
-  paprastų `{lat, lng}` objektų.
+- `index.html`, `css/style.css` — puslapio karkasas, HUD ir jutiklinio ekrano
+  valdymo mygtukų stilius.
+- `js/geo.js` — vienintelė vieta, kur pasirodo lat/lng: `toLocal()` projektuoja
+  `{lat, lng}` į lokalius metrus `{x, z}` santykinai su fiksuotu pradžios
+  tašku (plokščios Žemės aproksimacija, tinkama tokiam mažam žaidimo plotui).
+  Visa kita (judėjimas, vairavimas, atstumai) vyksta tuose lokaliuose
+  koordinatėse su paprasta trigonometrija — geodezijos vykdymo metu
+  nereikia. Taip pat apibrėžia `forwardVec`/`rightVec`/`headingTo` —
+  kryptis atitinka tiesiai `THREE.Object3D.rotation.y` reikšmę.
 - `js/routes.js` — eismo maršrutų sąrašas (pradžios/pabaigos taškai Vilniuje)
   ir jų išsprendimas į tikrus, kelias atitinkančius taškų masyvus per
   nemokamą OSRM viešą demo serverį (`router.project-osrm.org`).
+- `js/world.js` — sukuria 3D sceną: dangus/apšvietimas, žemė, keliai (dėžutės
+  palei realias OSRM trasas) ir procedūriškai išmėtyti blokiniai pastatai
+  palei tuos kelius.
 - `js/vehicles.js` — `Vehicle` (viena mašina: arba NPC eismo dalyvė, arba
-  žaidėjo vairuojama) ir `TrafficManager` (visų mašinų valdymas, nuolatinio
-  eismo tankio palaikymas — kai žaidėjas įlipa į NPC mašiną, jos maršrutas
-  tuoj pat papildomas nauja mašina).
-- `js/player.js` — žaidėjo būsena: vaikščiojimas arba vairavimas.
-- `js/hud.js` — rankų siūbavimo animacija, greitimatis, prompt'ai.
-- `js/main.js` — žaidimo ciklas (`requestAnimationFrame`), klaviatūros ir
-  jutiklinio ekrano įvesties apdorojimas, Leaflet žemėlapio inicializacija,
-  pirmo asmens kameros pasukimas ir priartinimo (zoom) valdymas.
+  žaidėjo vairuojama, su blokiniu "Roblox" stiliaus 3D modeliu) ir
+  `TrafficManager` (visų mašinų valdymas, nuolatinio eismo tankio
+  palaikymas — kai žaidėjas įlipa į NPC mašiną, jos maršrutas tuoj pat
+  papildomas nauja mašina).
+- `js/player.js` — tikras pirmo asmens valdiklis: laisvas žvilgsnis
+  (yaw+pitch) nepriklausomai nuo judėjimo krypties, 3D rankų "viewmodel"
+  su siūbavimo animacija vaikščiojant, prietaisų skydelis/vairas vairuojant.
+- `js/hud.js` — greitimatis, prompt'ai.
+- `js/main.js` — Three.js scenos/kameros/renderer'io inicializacija, žaidimo
+  ciklas (`requestAnimationFrame`), klaviatūros, pelės (Pointer Lock API) ir
+  jutiklinio ekrano įvesties apdorojimas.
 
-Žemėlapio "variklis" — [Leaflet](https://leafletjs.com/) + OpenStreetMap
-plyteles (`{s}.tile.openstreetmap.org`), įkeliamos per CDN (cdnjs), be
-jokio rakto.
+Three.js įkeliamas per CDN (cdnjs), be jokio rakto.
 
 ## Kaip veikia "nuolatinis eismas"
 
 `TRAFFIC_ROUTES` (`js/routes.js`) apibrėžia kelias pradžios/pabaigos taškų
 poras Vilniuje. Įkrovus žaidimą, kiekvienai porai per OSRM užklausiama reali
-vairavimo trasa (kelias atitinkantis taškų masyvas). Kiekvienam maršrutui
-priskiriama po kelias `Vehicle` instancijas, kurios visą laiką slenka pirmyn
-tuo pačiu tašku masyvu, o pasiekusios galą — apsisuka ir važiuoja atgal
-(ping-pong), taip sukuriant nenutrūkstamą eismą. Kai žaidėjas į tokią mašiną
-įlipa, ji išimama iš NPC sąrašo ir tame maršrute tuoj pat atsiranda nauja —
-eismo tankis nekrenta.
+vairavimo trasa, kuri projektuojama į lokalias 3D koordinates. Kiekvienam
+maršrutui priskiriama po kelias `Vehicle` instancijas, kurios visą laiką
+slenka pirmyn tuo pačiu tašku masyvu, o pasiekusios galą — apsisuka ir
+važiuoja atgal (ping-pong), taip sukuriant nenutrūkstamą eismą. Kai žaidėjas
+į tokią mašiną įlipa, ji išimama iš NPC sąrašo ir tame maršrute tuoj pat
+atsiranda nauja — eismo tankis nekrenta.
 
 ## Žinomi apribojimai / ką būtų galima tobulinti
 
+- Pastatai yra **procedūriškai išmėtyti dėžučių tipo** modeliai palei
+  gatves, ne tikri Vilniaus pastatų kontūrai — tikriems pastatams reikėtų
+  papildomos Overpass API (OpenStreetMap) užklausos, kuri gautų realius
+  pastatų poligonus.
 - `router.project-osrm.org` yra nemokamas **viešas demo** serveris — geras
   šiam prototipui, bet ribotas (rate limit) ir netinkamas rimtai
   produkcijai; jei reikės daugiau maršrutų ar dažnesnių užklausų, verta
   pasikelti savo OSRM instanciją.
-- Kadangi visas žemėlapis (kartu su gatvių pavadinimais) sukasi su kamera,
-  tekstas plytelėse pasukimo metu būna įstrižas/neįsiskaitomas — tai žinomas
-  šio "heading-up" sprendimo trade-off be papildomos (ne core) Leaflet
-  bibliotekos.
-- Nėra susidūrimų fizikos tarp automobilių ar su pastatais — tai
-  žaidimas be "sienų", mašinos ir žaidėjas gali važiuoti bet kur.
-- Rankų HUD yra 2D CSS animacija, ne pilnas 3D pirmo asmens vaizdas.
-- Naudojant OpenStreetMap duomenis, būtina išlaikyti "© OpenStreetMap
-  contributors" atribuciją žemėlapyje (jau įtraukta, nepasukama) — tai ODbL
-  licencijos reikalavimas.
+- Nėra susidūrimų fizikos tarp automobilių ar su pastatais/žeme — žaidimas
+  be "sienų", mašinos ir žaidėjas gali važiuoti/vaikščioti bet kur (net per
+  pastatus).
+- Vairuojant kamera visiškai užrakinta į mašinos kryptį (nėra laisvo
+  apsižvalgymo iš vairuotojo vietos).
+- Grafika yra sąmoningai paprasta/blokinė (dėžutės, plokšti flat-shading
+  spalvos) — tai atitinka "Roblox stiliaus" estetiką, o ne fotorealizmą, ir
+  gerai veikia telefonuose.

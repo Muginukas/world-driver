@@ -8,45 +8,24 @@ html, body {
   overscroll-behavior: none;
   font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  background: #8fd3f4;
 }
 
-/* ---------- Heading-up rotating map ---------- */
-/* #map is deliberately oversized (sized in JS to the viewport's
-   diagonal) and rotated by the player's heading each frame, so the
-   world turns underneath a player who always faces "up" — the closest
-   a flat 2D tile map can get to a first-person driving/walking feel.
-   #map-viewport clips it back down to the actual screen size. */
-#map-viewport {
+#game-container {
   position: fixed;
   inset: 0;
-  overflow: hidden;
-  background: #1b1f24;
 }
 
-#map {
-  position: absolute;
-  transform-origin: 50% 50%;
-  will-change: transform;
+#game-container canvas {
+  display: block;
 }
 
-#osm-attribution {
+#look-zone {
   position: fixed;
-  left: 50%;
-  bottom: 4px;
-  transform: translateX(-50%);
-  z-index: 26;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(0, 0, 0, 0.35);
-  padding: 2px 6px;
-  border-radius: 4px;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-#osm-attribution a {
-  color: inherit;
-  pointer-events: auto;
+  inset: 0;
+  z-index: 10;
+  touch-action: none;
+  cursor: crosshair;
 }
 
 .hidden {
@@ -67,6 +46,7 @@ html, body {
   display: flex;
   gap: 14px;
   align-items: center;
+  pointer-events: none;
 }
 
 #mode-label {
@@ -88,6 +68,7 @@ html, body {
   font-size: 15px;
   z-index: 20;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ---------- Driving HUD ---------- */
@@ -96,6 +77,7 @@ html, body {
   top: 12px;
   right: 12px;
   z-index: 20;
+  pointer-events: none;
 }
 
 #speedometer {
@@ -113,52 +95,12 @@ html, body {
   font-size: 20px;
 }
 
-/* ---------- Hands HUD (walking) ---------- */
-#hands-hud {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 220px;
-  pointer-events: none;
-  z-index: 15;
-}
-
-.hand {
-  position: absolute;
-  bottom: -40px;
-  width: 90px;
-  height: 160px;
-  background: linear-gradient(180deg, #e0b089, #c98a5c);
-  border-radius: 40px 40px 20px 20px;
-  box-shadow: inset 0 -10px 20px rgba(0, 0, 0, 0.15);
-  transition: transform 0.05s linear;
-}
-
-.hand-left {
-  left: 8%;
-  transform-origin: bottom center;
-  transform: rotate(8deg) translateY(0);
-}
-
-.hand-right {
-  right: 8%;
-  transform-origin: bottom center;
-  transform: rotate(-8deg) translateY(0);
-}
-
-/* walking bob/sway animation classes, toggled from JS by alternating step phase */
-.hand-left.step-a  { transform: rotate(14deg) translateY(-18px); }
-.hand-left.step-b  { transform: rotate(4deg)  translateY(0); }
-.hand-right.step-a { transform: rotate(-4deg) translateY(0); }
-.hand-right.step-b { transform: rotate(-14deg) translateY(-18px); }
-
 /* ---------- Touch controls ---------- */
 #touch-controls {
   position: fixed;
   inset: 0;
   z-index: 25;
-  pointer-events: none; /* let clicks fall through except on the buttons below */
+  pointer-events: none; /* let clicks/drags fall through to #look-zone except on the buttons below */
 }
 
 #dpad {
@@ -239,7 +181,7 @@ html, body {
 
 .setup-box {
   width: 90vw;
-  max-width: 420px;
+  max-width: 440px;
   box-sizing: border-box;
   padding: 24px 28px;
   background: #1c2430;
@@ -275,27 +217,4 @@ html, body {
 
 #start-btn:hover {
   background: #2563eb;
-}
-
-/* ---------- Vehicle / player map icons (Leaflet divIcons) ---------- */
-.car-icon, .player-icon {
-  background: transparent;
-  border: none;
-}
-
-.car-body {
-  width: 100%;
-  height: 100%;
-  clip-path: polygon(50% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%);
-  border: 1.5px solid #1c1c1c;
-  transform-origin: 50% 50%;
-}
-
-.player-body {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: #2b6fff;
-  border: 2px solid #fff;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }

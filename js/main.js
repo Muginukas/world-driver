@@ -1,68 +1,53 @@
 // Entry point. Called once the player dismisses the intro overlay
-// (Leaflet is already loaded by then via a plain, synchronous <script>
-// tag in index.html, so `L` is available with no callback dance needed).
+// (Three.js is already loaded by then via a plain, synchronous <script>
+// tag in index.html, so `THREE` is available with no callback dance).
 
 const pressedKeys = new Set();
-let map, player, traffic;
+let renderer, scene, camera, player, traffic;
 let lastFrameTime = null;
+let pointerLocked = false;
 
-const WALK_ZOOM = 19;
-const DRIVE_ZOOM = 17;
-const WALK_LOOKAHEAD_M = 8; // how far "ahead" of the player the camera looks
-const DRIVE_LOOKAHEAD_M = 20;
-
-// #map is kept oversized (its own diagonal) so that rotating it to keep
-// the player's heading pointing "up" never exposes empty corners.
-function sizeMapLayer() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const diagonal = Math.ceil(Math.sqrt(vw * vw + vh * vh));
-
-  const mapEl = document.getElementById('map');
-  mapEl.style.width = `${diagonal}px`;
-  mapEl.style.height = `${diagonal}px`;
-  mapEl.style.left = `${Math.round((vw - diagonal) / 2)}px`;
-  mapEl.style.top = `${Math.round((vh - diagonal) / 2)}px`;
-
-  if (map) map.invalidateSize({ pan: false });
-}
+const WALK_FOV = 70;
+const DRIVE_FOV = 78;
+const LOOK_SENSITIVITY = 0.0022; // mouse (pointer lock)
+const TOUCH_LOOK_SENSITIVITY = 0.005;
+const KEY_LOOK_RATE = 1.8; // rad/s, arrow-key look fallback
 
 function initGame() {
-  sizeMapLayer();
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 400);
 
-  map = L.map('map', {
-    center: [LITHUANIA_CENTER.lat, LITHUANIA_CENTER.lng],
-    zoom: WALK_ZOOM,
-    maxZoom: 19,
-    zoomControl: false,
-    dragging: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    boxZoom: false,
-    keyboard: false,
-    attributionControl: false, // shown separately, non-rotated (see #osm-attribution)
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  document.getElementById('game-container').appendChild(renderer.domElement);
+
+  window.addEventListener('resize', onResize);
+
+  player = new Player(camera, { x: 0, z: 0 });
+  traffic = new TrafficManager(scene);
+
+  resolveTrafficRoutes((latLngPaths) => {
+    const projected = latLngPaths.map((path) => path.map((p) => toLocal(START_POSITION, p)));
+    buildWorld(scene, projected);
+    const parkedLocal = PARKED_CARS.map((p) => toLocal(START_POSITION, p));
+    traffic.init(projected, parkedLocal);
   });
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-  }).addTo(map);
-
-  window.addEventListener('resize', sizeMapLayer);
-  window.addEventListener('orientationchange', sizeMapLayer);
 
   HUD.init();
   HUD.setMode(false);
 
-  player = new Player(map, START_POSITION);
-  traffic = new TrafficManager(map);
-
-  resolveTrafficRoutes((paths) => {
-    traffic.init(paths, PARKED_CARS);
-  });
-
   bindInput();
   bindTouchControls();
+  bindLookZone();
+
   requestAnimationFrame(tick);
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function bindInput() {
@@ -75,8 +60,23 @@ function bindInput() {
     pressedKeys.add(key);
   });
 
-  window.addEventListener('keyup', (e) => {
-    pressedKeys.delete(e.key.toLowerCase());
+  window.addEventListener('keyup', (e) => pressedKeys.delete(e.key.toLowerCase()));
+
+  // #look-zone visually covers the canvas (it needs to sit on top to
+  // catch touch-look drags), so it's the element that actually receives
+  // desktop clicks too — hook pointer-lock activation there instead of
+  // on the canvas itself.
+  document.getElementById('look-zone').addEventListener('click', () => {
+    if (renderer.domElement.requestPointerLock) renderer.domElement.requestPointerLock();
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    pointerLocked = document.pointerLockElement === renderer.domElement;
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!pointerLocked || player.isDriving) return;
+    player.look(-e.movementX * LOOK_SENSITIVITY, -e.movementY * LOOK_SENSITIVITY);
   });
 }
 
@@ -117,19 +117,48 @@ function bindTouchControls() {
   actionBtn.addEventListener('click', () => handleInteract());
 }
 
+// Touch-drag anywhere on screen looks around (like mouse-look on
+// desktop). The D-pad/action button sit visually on top of this layer,
+// so touches starting on them go to their own handlers instead.
+function bindLookZone() {
+  const zone = document.getElementById('look-zone');
+  let last = null;
+
+  zone.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+
+  zone.addEventListener('touchmove', (e) => {
+    if (!last || e.touches.length !== 1 || player.isDriving) return;
+    const t = e.touches[0];
+    const dx = t.clientX - last.x;
+    const dy = t.clientY - last.y;
+    last = { x: t.clientX, y: t.clientY };
+    player.look(-dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
+    e.preventDefault();
+  }, { passive: false });
+
+  const clearLast = () => { last = null; };
+  zone.addEventListener('touchend', clearLast);
+  zone.addEventListener('touchcancel', clearLast);
+}
+
 function handleInteract() {
   if (player.isDriving) {
     const vehicle = player.exitVehicle();
     traffic.onVehicleExited(vehicle);
     HUD.setMode(false);
-    map.setZoom(WALK_ZOOM, { animate: false });
+    camera.fov = WALK_FOV;
+    camera.updateProjectionMatrix();
   } else {
     const vehicle = traffic.findEnterable(player.position);
     if (vehicle) {
       player.enterVehicle(vehicle);
       traffic.onVehicleEntered(vehicle);
       HUD.setMode(true);
-      map.setZoom(DRIVE_ZOOM, { animate: false });
+      camera.fov = DRIVE_FOV;
+      camera.updateProjectionMatrix();
     }
   }
 }
@@ -156,18 +185,18 @@ function updatePrompt() {
   }
 }
 
-// Heading-up "first-person" camera: rotate the (oversized) map so the
-// player's current heading always points to the top of the screen.
-function updateCamera() {
-  const heading = player.isDriving ? player.vehicle.heading : player.heading;
-  const lookahead = player.isDriving ? DRIVE_LOOKAHEAD_M : WALK_LOOKAHEAD_M;
-  // Pivot the view on a point *ahead* of the player (not on the player
-  // themselves), so after rotation the player sits nearer the bottom
-  // of the screen and more of what's ahead is visible above them.
-  const camCenter = Geo.offset(player.currentPosition, lookahead, heading);
-
-  document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-  map.panTo([camCenter.lat, camCenter.lng], { animate: false });
+// Arrow keys as a keyboard-only look fallback (mouse/touch-drag are the
+// primary look input). Disabled while driving, where the camera is
+// locked to the vehicle's own heading.
+function updateKeyboardLook(dt) {
+  if (player.isDriving) return;
+  let deltaYaw = 0;
+  let deltaPitch = 0;
+  if (pressedKeys.has('arrowleft')) deltaYaw += KEY_LOOK_RATE * dt;
+  if (pressedKeys.has('arrowright')) deltaYaw -= KEY_LOOK_RATE * dt;
+  if (pressedKeys.has('arrowup')) deltaPitch += KEY_LOOK_RATE * dt;
+  if (pressedKeys.has('arrowdown')) deltaPitch -= KEY_LOOK_RATE * dt;
+  if (deltaYaw || deltaPitch) player.look(deltaYaw, deltaPitch);
 }
 
 function tick(now) {
@@ -176,6 +205,8 @@ function tick(now) {
   lastFrameTime = now;
   dt = Math.min(dt, 0.1); // guard against tab-switch stalls
 
+  updateKeyboardLook(dt);
+
   if (player.isDriving) {
     player.vehicle.updateDriven(dt, pressedKeys);
     traffic.update(dt, player.vehicle);
@@ -183,12 +214,12 @@ function tick(now) {
   } else {
     player.updateWalking(dt, pressedKeys);
     traffic.update(dt, null);
-    HUD.updateWalkingHands(dt, player.isMoving);
   }
 
-  updateCamera();
+  player.updateCamera();
   updatePrompt();
 
+  renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 
