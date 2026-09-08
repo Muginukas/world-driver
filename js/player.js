@@ -4,7 +4,7 @@
 // closest thing to "only your hands move". Driving locks the camera to
 // the vehicle's own heading and swaps the hands for a small dashboard.
 
-const WALK_SPEED_MPS = 1.4; // average human walking speed
+const WALK_SPEED_MPS = 5; // brisk game-pace walk, not realistic 1.4 m/s
 const EYE_HEIGHT = 1.7;
 const DRIVE_EYE_HEIGHT = 1.15; // seated in the cabin, not standing above it
 const DRIVE_SEAT_FORWARD_OFFSET = 0.5; // toward the windshield, off the car's center
@@ -27,23 +27,39 @@ function buildHandsViewmodel() {
   return { group, leftHand, rightHand };
 }
 
+// The car's interior: dashboard + wheel directly ahead, plus A-pillars
+// and a sun visor framing the windshield in peripheral view — so it
+// reads as sitting inside the car, not just floating with a HUD prop.
 function buildDashboard() {
   const group = new THREE.Group();
+  const trimMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
 
-  const dash = new THREE.Mesh(
-    new THREE.BoxGeometry(1.3, 0.3, 0.35),
-    new THREE.MeshLambertMaterial({ color: 0x222222 })
-  );
-  dash.position.set(0, -0.35, -0.6);
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.35, 0.4), trimMat);
+  dash.position.set(0, -0.28, -0.55);
   group.add(dash);
 
   const wheel = new THREE.Mesh(
-    new THREE.TorusGeometry(0.22, 0.035, 8, 20),
+    new THREE.TorusGeometry(0.26, 0.04, 8, 20),
     new THREE.MeshLambertMaterial({ color: 0x111111 })
   );
-  wheel.position.set(0, -0.22, -0.55);
+  wheel.position.set(0, -0.16, -0.5);
   wheel.rotation.x = Math.PI / 2.3;
   group.add(wheel);
+
+  const pillarGeo = new THREE.BoxGeometry(0.1, 1.3, 0.1);
+  const leftPillar = new THREE.Mesh(pillarGeo, trimMat);
+  leftPillar.position.set(-0.68, 0.1, -0.7);
+  leftPillar.rotation.z = 0.18;
+  group.add(leftPillar);
+
+  const rightPillar = new THREE.Mesh(pillarGeo, trimMat);
+  rightPillar.position.set(0.68, 0.1, -0.7);
+  rightPillar.rotation.z = -0.18;
+  group.add(rightPillar);
+
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.25), trimMat);
+  visor.position.set(0, 0.58, -0.65);
+  group.add(visor);
 
   group.visible = false;
   return group;
@@ -127,7 +143,7 @@ class Player {
       this.hands.rightHand.position.y = -0.32;
       return;
     }
-    const bob = Math.sin(this.walkPhase * 8) * 0.03;
+    const bob = Math.sin(this.walkPhase * 12) * 0.03;
     this.hands.leftHand.position.y = -0.32 + bob;
     this.hands.rightHand.position.y = -0.32 - bob;
   }

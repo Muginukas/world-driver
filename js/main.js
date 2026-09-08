@@ -305,7 +305,14 @@ function renderMinimap() {
   renderer.setViewport(x, y, size, size);
   renderer.setScissor(x, y, size, size);
   renderer.setScissorTest(true);
+
+  // The main view's distance fog would otherwise wash out a flat
+  // top-down camera ~150m up (well inside the fog's near/far range) —
+  // drop it just for this pass so the minimap stays crisp.
+  const savedFog = scene.fog;
+  scene.fog = null;
   renderer.render(scene, minimapCamera);
+  scene.fog = savedFog;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
