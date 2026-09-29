@@ -178,7 +178,7 @@ class Player {
       const fwd = forwardVec(v.heading);
       this.camera.position.set(
         v.position.x + fwd.x * DRIVE_SEAT_FORWARD_OFFSET,
-        DRIVE_EYE_HEIGHT,
+        DRIVE_EYE_HEIGHT + v.y,
         v.position.z + fwd.z * DRIVE_SEAT_FORWARD_OFFSET
       );
       this.camera.rotation.y = v.heading + this.driveLookYaw;

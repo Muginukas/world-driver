@@ -15,6 +15,8 @@ const DRIVE_FRICTION = 8; // m/s^2 natural decel when coasting
 const DRIVE_TURN_RATE = 1.0; // rad/s at full steering authority
 const DRIVE_TURN_FULL_SPEED_MPS = 10; // speed at which steering reaches full authority (~36 km/h)
 
+const JUMP_GRAVITY_MPS2 = 18; // only applied while airborne (see ramps.js)
+
 // Simple blocky "Roblox-style" car: a body box, a lighter cabin box, and
 // four dark wheel boxes. Modeled with its nose toward local -Z, matching
 // forwardVec(0) — i.e. heading 0 means facing local -Z.
@@ -57,6 +59,8 @@ class Vehicle {
     this.position = { x: position.x, z: position.z };
     this.heading = 0;
     this.speed = 0; // signed, m/s (negative = reversing)
+    this.y = 0; // height off the ground, for ramp jumps (see ramps.js)
+    this.vy = 0; // vertical speed, m/s
     this.color = colorHex;
 
     // NPC route state (null when parked / player-controlled)
@@ -143,11 +147,23 @@ class Vehicle {
       this.position.z += fwd.z * this.speed * dt;
     }
 
+    // Ramp jump: once launched (vy set > 0 by checkRampLaunch), just fall
+    // under gravity and land back on the ground — no collision, purely a
+    // playful hop.
+    if (this.y > 0 || this.vy > 0) {
+      this.vy -= JUMP_GRAVITY_MPS2 * dt;
+      this.y += this.vy * dt;
+      if (this.y < 0) {
+        this.y = 0;
+        this.vy = 0;
+      }
+    }
+
     this.render();
   }
 
   render() {
-    this.mesh.position.set(this.position.x, 0, this.position.z);
+    this.mesh.position.set(this.position.x, this.y, this.position.z);
     this.mesh.rotation.y = this.heading;
   }
 

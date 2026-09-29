@@ -5,6 +5,7 @@
 const pressedKeys = new Set();
 let renderer, scene, camera, player, traffic;
 let minimapCamera, playerMarker;
+let ramps = [];
 let lastFrameTime = null;
 let pointerLocked = false;
 
@@ -80,6 +81,7 @@ function initGame() {
     buildWorld(scene, projected);
     const parkedLocal = PARKED_CARS.map((p) => toLocal(START_POSITION, p));
     traffic.init(projected, parkedLocal);
+    ramps = buildRamps(scene);
   });
 
   HUD.init();
@@ -285,6 +287,7 @@ function tick(now) {
 
   if (player.isDriving) {
     player.vehicle.updateDriven(dt, pressedKeys);
+    checkRampLaunch(player.vehicle, ramps);
     traffic.update(dt, player.vehicle);
     HUD.updateSpeed(player.vehicle.speedKmh);
     // A bit of extra FOV at high speed sells how fast the car is going.

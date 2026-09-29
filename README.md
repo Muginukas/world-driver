@@ -71,6 +71,9 @@ tai, kur žiūri.
   `TrafficManager` (visų mašinų valdymas, nuolatinio eismo tankio
   palaikymas — kai žaidėjas įlipa į NPC mašiną, jos maršrutas tuoj pat
   papildomas nauja mašina).
+- `js/ramps.js` — kelios trampliną primenančios rampos šalia starto taško
+  su geltonu "RAMP" ženklu: pervažiavus per rampą pakankamu greičiu,
+  mašina pakyla į orą (gravitacija) ir vėl nusileidžia ant žemės.
 - `js/player.js` — tikras pirmo asmens valdiklis: laisvas žvilgsnis
   (yaw+pitch) nepriklausomai nuo judėjimo krypties, 3D rankų "viewmodel"
   su siūbavimo animacija vaikščiojant, prietaisų skydelis/vairas vairuojant.
