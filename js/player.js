@@ -1,8 +1,9 @@
-// The player: a real first-person controller. Walking uses free
-// mouse/touch look (yaw+pitch) decoupled from movement direction, with
-// a simple 3D "viewmodel" pair of hands bobbing as you walk — the
-// closest thing to "only your hands move". Driving locks the camera to
-// the vehicle's own heading and swaps the hands for a small dashboard.
+// The player: a real first-person controller with free mouse/touch look
+// (yaw+pitch), decoupled from movement direction — the same look
+// controls work whether walking or driving. Walking shows a simple 3D
+// "viewmodel" pair of hands bobbing as you move; driving swaps them for
+// a dashboard/wheel and seats the camera in the car (movement itself
+// still follows the vehicle's own heading/steering, not where you look).
 
 const WALK_SPEED_MPS = 5; // brisk game-pace walk, not realistic 1.4 m/s
 const EYE_HEIGHT = 1.7;
@@ -90,6 +91,10 @@ class Player {
 
   enterVehicle(vehicle) {
     this.vehicle = vehicle;
+    // Start facing forward through the windshield; free look (same
+    // yaw/pitch controls as walking) takes over from here.
+    this.yaw = vehicle.heading;
+    this.pitch = 0;
     this.hands.group.visible = false;
     this.dashboard.visible = true;
     // Hide the car's own shell so nothing sits between the camera and
@@ -153,14 +158,17 @@ class Player {
 
     if (this.isDriving) {
       const v = this.vehicle;
+      // The seat's position within the car is fixed to the car's own
+      // heading (it's a physical spot in the cabin), but where you look
+      // from that seat is free — same yaw/pitch controls as walking.
       const fwd = forwardVec(v.heading);
       this.camera.position.set(
         v.position.x + fwd.x * DRIVE_SEAT_FORWARD_OFFSET,
         DRIVE_EYE_HEIGHT,
         v.position.z + fwd.z * DRIVE_SEAT_FORWARD_OFFSET
       );
-      this.camera.rotation.y = v.heading;
-      this.camera.rotation.x = 0;
+      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.x = this.pitch;
     } else {
       this.camera.position.set(this.position.x, EYE_HEIGHT, this.position.z);
       this.camera.rotation.y = this.yaw;

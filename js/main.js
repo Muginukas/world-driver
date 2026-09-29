@@ -123,7 +123,7 @@ function bindInput() {
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!pointerLocked || player.isDriving) return;
+    if (!pointerLocked) return;
     player.look(-e.movementX * LOOK_SENSITIVITY, -e.movementY * LOOK_SENSITIVITY);
   });
 }
@@ -178,7 +178,7 @@ function bindLookZone() {
   }, { passive: true });
 
   zone.addEventListener('touchmove', (e) => {
-    if (!last || e.touches.length !== 1 || player.isDriving) return;
+    if (!last || e.touches.length !== 1) return;
     const t = e.touches[0];
     const dx = t.clientX - last.x;
     const dy = t.clientY - last.y;
@@ -238,8 +238,10 @@ function updatePrompt() {
 }
 
 // Arrow keys as a keyboard-only look fallback (mouse/touch-drag are the
-// primary look input). Disabled while driving, where the camera is
-// locked to the vehicle's own heading.
+// primary look input, and work the same whether walking or driving).
+// Disabled while driving specifically because arrows double as the
+// steering fallback there (see vehicles.js) — using them for look too
+// would fight the steering input.
 function updateKeyboardLook(dt) {
   if (player.isDriving) return;
   let deltaYaw = 0;

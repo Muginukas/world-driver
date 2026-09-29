@@ -43,8 +43,11 @@ identiškai, nepriklausomai nuo įvesties būdo. Žvilgsnis (pelė/pirštas/rody
 sukioja kamerą nepriklausomai nuo judėjimo krypties — tikras pirmo asmens
 valdymas, ne senasis "žemėlapis sukasi" sprendimas.
 
-Vairuojant kamera užrakinta į mašinos kryptį (žiūri tiesiai pro priekinį
-stiklą) — laisvas apsižvalgymas vairuojant kol kas neįgyvendintas.
+Vairuojant žvilgsnis lygiai toks pat laisvas kaip vaikščiojant — vairuotojo
+vieta mašinoje pasukta pagal jos kryptį, bet iš ten gali apsidairyti bet
+kur pele/pirštu/rodyklėmis (rodyklės vairuojant naudojamos posūkiams, ne
+žvilgsniui). Pati mašina važiuoja pagal savo vairavimo kryptį, ne pagal
+tai, kur žiūri.
 
 ## Architektūra
 
@@ -102,8 +105,6 @@ atsiranda nauja — eismo tankis nekrenta.
 - Nėra susidūrimų fizikos tarp automobilių ar su pastatais/žeme — žaidimas
   be "sienų", mašinos ir žaidėjas gali važiuoti/vaikščioti bet kur (net per
   pastatus).
-- Vairuojant kamera visiškai užrakinta į mašinos kryptį (nėra laisvo
-  apsižvalgymo iš vairuotojo vietos).
 - Grafika yra sąmoningai paprasta/blokinė (dėžutės, plokšti flat-shading
   spalvos) — tai atitinka "Roblox stiliaus" estetiką, o ne fotorealizmą, ir
   gerai veikia telefonuose.
