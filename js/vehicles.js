@@ -8,8 +8,8 @@ const CAR_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 
 const NPC_SPEED_MPS = 8; // ~29 km/h ambient city traffic speed
 const ENTER_RADIUS_M = 6;
 
-const DRIVE_MAX_SPEED_MPS = 1000 / 3.6; // 1000 km/h
-const DRIVE_ACCEL = 45; // m/s^2 - tuned so 1000 km/h is actually reachable
+const DRIVE_MAX_SPEED_MPS = 200 / 3.6; // 200 km/h
+const DRIVE_ACCEL = 45; // m/s^2
 const DRIVE_BRAKE = 70; // m/s^2
 const DRIVE_FRICTION = 8; // m/s^2 natural decel when coasting
 const DRIVE_TURN_RATE = 1.0; // rad/s at full steering authority

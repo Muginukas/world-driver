@@ -287,8 +287,8 @@ function tick(now) {
     player.vehicle.updateDriven(dt, pressedKeys);
     traffic.update(dt, player.vehicle);
     HUD.updateSpeed(player.vehicle.speedKmh);
-    // A bit of extra FOV at high speed sells how fast 1000 km/h actually is.
-    const speedFraction = Math.min(1, player.vehicle.speedKmh / 1000);
+    // A bit of extra FOV at high speed sells how fast the car is going.
+    const speedFraction = Math.min(1, player.vehicle.speedKmh / 200);
     camera.fov = DRIVE_FOV + speedFraction * 35;
     camera.updateProjectionMatrix();
   } else {
