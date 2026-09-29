@@ -8,12 +8,12 @@ const CAR_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 
 const NPC_SPEED_MPS = 8; // ~29 km/h ambient city traffic speed
 const ENTER_RADIUS_M = 6;
 
-const DRIVE_MAX_SPEED_MPS = 200 / 3.6; // 200 km/h
+const DRIVE_MAX_SPEED_MPS = 50 / 3.6; // 50 km/h
 const DRIVE_ACCEL = 45; // m/s^2
 const DRIVE_BRAKE = 70; // m/s^2
 const DRIVE_FRICTION = 8; // m/s^2 natural decel when coasting
 const DRIVE_TURN_RATE = 1.0; // rad/s at full steering authority
-const DRIVE_TURN_FULL_SPEED_MPS = 10; // speed at which steering reaches full authority (~36 km/h) - kept independent of the (now absurd) top speed so normal-speed handling doesn't get sluggish
+const DRIVE_TURN_FULL_SPEED_MPS = 10; // speed at which steering reaches full authority (~36 km/h)
 
 // Simple blocky "Roblox-style" car: a body box, a lighter cabin box, and
 // four dark wheel boxes. Modeled with its nose toward local -Z, matching
