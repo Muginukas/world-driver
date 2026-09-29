@@ -168,18 +168,35 @@ function bindTouchControls() {
 // Touch-drag anywhere on screen looks around (like mouse-look on
 // desktop). The D-pad/action button sit visually on top of this layer,
 // so touches starting on them go to their own handlers instead.
+//
+// Tracked by the specific finger's touch identifier, not just "how many
+// touches are on screen" — e.touches counts every active touch on the
+// whole page, so holding a D-pad button (1 touch there) while dragging
+// to look (a 2nd finger, here) must not get rejected just because the
+// page-wide total is 2.
 function bindLookZone() {
   const zone = document.getElementById('look-zone');
+  let activeTouchId = null;
   let last = null;
 
+  const findTouch = (touchList, id) => {
+    for (let i = 0; i < touchList.length; i++) {
+      if (touchList[i].identifier === id) return touchList[i];
+    }
+    return null;
+  };
+
   zone.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1) return;
-    last = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (activeTouchId !== null) return; // already tracking a look-drag finger
+    const t = e.changedTouches[0];
+    activeTouchId = t.identifier;
+    last = { x: t.clientX, y: t.clientY };
   }, { passive: true });
 
   zone.addEventListener('touchmove', (e) => {
-    if (!last || e.touches.length !== 1) return;
-    const t = e.touches[0];
+    if (activeTouchId === null) return;
+    const t = findTouch(e.changedTouches, activeTouchId);
+    if (!t) return; // this event is about some other finger
     const dx = t.clientX - last.x;
     const dy = t.clientY - last.y;
     last = { x: t.clientX, y: t.clientY };
@@ -187,9 +204,14 @@ function bindLookZone() {
     e.preventDefault();
   }, { passive: false });
 
-  const clearLast = () => { last = null; };
-  zone.addEventListener('touchend', clearLast);
-  zone.addEventListener('touchcancel', clearLast);
+  const releaseIfOurs = (e) => {
+    if (findTouch(e.changedTouches, activeTouchId)) {
+      activeTouchId = null;
+      last = null;
+    }
+  };
+  zone.addEventListener('touchend', releaseIfOurs);
+  zone.addEventListener('touchcancel', releaseIfOurs);
 }
 
 function handleInteract() {
