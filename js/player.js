@@ -72,6 +72,7 @@ class Player {
     this.position = { x: startLocal.x, z: startLocal.z };
     this.yaw = 0;
     this.pitch = 0;
+    this.driveLookYaw = 0; // look angle *relative to the car's heading* while driving
     this.vehicle = null; // Vehicle instance while driving, else null
     this.isMoving = false;
     this.walkPhase = 0;
@@ -91,9 +92,9 @@ class Player {
 
   enterVehicle(vehicle) {
     this.vehicle = vehicle;
-    // Start facing forward through the windshield; free look (same
-    // yaw/pitch controls as walking) takes over from here.
-    this.yaw = vehicle.heading;
+    // Start facing forward through the windshield; free look adds an
+    // offset on top of the car's heading from here (see updateCamera).
+    this.driveLookYaw = 0;
     this.pitch = 0;
     this.hands.group.visible = false;
     this.dashboard.visible = true;
@@ -108,7 +109,9 @@ class Player {
     // Step out beside the car rather than on top of it.
     const right = rightVec(v.heading);
     this.position = { x: v.position.x + right.x * 2.5, z: v.position.z + right.z * 2.5 };
-    this.yaw = v.heading;
+    // Keep facing wherever you were looking in the car (car heading +
+    // whatever look offset you'd built up), not just straight ahead.
+    this.yaw = v.heading + this.driveLookYaw;
     this.pitch = 0;
     this.hands.group.visible = true;
     this.dashboard.visible = false;
@@ -118,8 +121,17 @@ class Player {
 
   // deltaYaw/deltaPitch in radians; sign convention: positive deltaYaw
   // turns left, positive deltaPitch looks up (see geo.js forwardVec).
+  // While driving this adjusts the look angle *relative to the car*
+  // (driveLookYaw) rather than an absolute world direction — so the
+  // view turns together with the car through a corner, the way sitting
+  // in a real seat works, instead of staying fixed while the car spins
+  // underneath you.
   look(deltaYaw, deltaPitch) {
-    this.yaw += deltaYaw;
+    if (this.isDriving) {
+      this.driveLookYaw += deltaYaw;
+    } else {
+      this.yaw += deltaYaw;
+    }
     this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch + deltaPitch));
   }
 
@@ -159,15 +171,17 @@ class Player {
     if (this.isDriving) {
       const v = this.vehicle;
       // The seat's position within the car is fixed to the car's own
-      // heading (it's a physical spot in the cabin), but where you look
-      // from that seat is free — same yaw/pitch controls as walking.
+      // heading (it's a physical spot in the cabin). The view direction
+      // follows the car's heading too — turning a corner turns you with
+      // it, like actually sitting in the seat — plus whatever extra look
+      // angle you've dragged in on top (driveLookYaw).
       const fwd = forwardVec(v.heading);
       this.camera.position.set(
         v.position.x + fwd.x * DRIVE_SEAT_FORWARD_OFFSET,
         DRIVE_EYE_HEIGHT,
         v.position.z + fwd.z * DRIVE_SEAT_FORWARD_OFFSET
       );
-      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.y = v.heading + this.driveLookYaw;
       this.camera.rotation.x = this.pitch;
     } else {
       this.camera.position.set(this.position.x, EYE_HEIGHT, this.position.z);
