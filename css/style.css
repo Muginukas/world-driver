@@ -79,10 +79,28 @@ html, body {
   width: 140px;
   height: 140px;
   z-index: 20;
-  pointer-events: none;
+  /* Interactive: tap/click inside it to set a destination marker there
+     (see bindMinimapTarget in main.js) — so it needs pointer events,
+     unlike the other pure-display HUD elements. */
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
   border: 3px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+#destination-info {
+  position: fixed;
+  left: 12px;
+  top: 202px;
+  z-index: 20;
+  background: rgba(20, 20, 20, 0.7);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  pointer-events: none;
 }
 
 /* ---------- Cockpit frame (driving) ---------- */

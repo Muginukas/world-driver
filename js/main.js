@@ -7,6 +7,8 @@ let renderer, scene, camera, player, traffic;
 let minimapCamera, playerMarker;
 let ramps = [];
 let buildings = [];
+let destination = null; // {x, z} in local meters, set by tapping the minimap
+let destinationMarker;
 let lastFrameTime = null;
 let pointerLocked = false;
 
@@ -52,6 +54,26 @@ function buildPlayerMarker() {
   return group;
 }
 
+// A pin marking a destination the player tapped on the minimap. Lives on
+// layer 1 only, like playerMarker — visible on the minimap, not in the
+// main first-person view.
+function buildDestinationMarker() {
+  const group = new THREE.Group();
+
+  const pin = new THREE.Mesh(
+    new THREE.CylinderGeometry(0, 1.8, 3, 4),
+    new THREE.MeshBasicMaterial({ color: 0x2fb4ff, depthTest: false })
+  );
+  pin.position.y = 3;
+  group.add(pin);
+
+  group.traverse((obj) => {
+    obj.layers.set(1);
+    obj.renderOrder = 999;
+  });
+  return group;
+}
+
 function initGame() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 400);
@@ -77,12 +99,16 @@ function initGame() {
   playerMarker = buildPlayerMarker();
   scene.add(playerMarker);
 
+  destinationMarker = buildDestinationMarker();
+  destinationMarker.visible = false;
+  scene.add(destinationMarker);
+
   resolveTrafficRoutes((latLngPaths) => {
     const projected = latLngPaths.map((path) => path.map((p) => toLocal(START_POSITION, p)));
     buildings = buildWorld(scene, projected);
     const parkedLocal = PARKED_CARS.map((p) => toLocal(START_POSITION, p));
     traffic.init(projected, parkedLocal);
-    ramps = buildRamps(scene);
+    ramps = buildRamps(scene, projected);
   });
 
   HUD.init();
@@ -91,6 +117,7 @@ function initGame() {
   bindInput();
   bindTouchControls();
   bindLookZone();
+  bindMinimapTarget();
 
   requestAnimationFrame(tick);
 }
@@ -217,6 +244,46 @@ function bindLookZone() {
   zone.addEventListener('touchcancel', releaseIfOurs);
 }
 
+// Tapping/clicking inside the minimap sets a destination there: the tap
+// position within the minimap's on-screen rect maps directly to a world
+// offset from the player, since the minimap camera is a fixed north-up
+// orthographic view centered on the player each frame (screen right =
+// world +X, screen top = world -Z — see updateMinimapMarker/renderMinimap).
+function bindMinimapTarget() {
+  const frame = document.getElementById('minimap-frame');
+
+  const setFromClient = (clientX, clientY) => {
+    const rect = frame.getBoundingClientRect();
+    const u = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const v = ((clientY - rect.top) / rect.height) * 2 - 1;
+    const pos = player.isDriving ? player.vehicle.position : player.position;
+    destination = {
+      x: pos.x + u * MINIMAP_VIEW_HALF,
+      z: pos.z + v * MINIMAP_VIEW_HALF,
+    };
+    destinationMarker.position.set(destination.x, 0, destination.z);
+    destinationMarker.visible = true;
+  };
+
+  frame.addEventListener('click', (e) => setFromClient(e.clientX, e.clientY));
+  frame.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    setFromClient(t.clientX, t.clientY);
+  }, { passive: false });
+}
+
+function updateDestinationInfo() {
+  const info = document.getElementById('destination-info');
+  if (!destination) {
+    info.classList.add('hidden');
+    return;
+  }
+  const pos = player.isDriving ? player.vehicle.position : player.position;
+  info.textContent = `Tikslas: ${Math.round(dist2D(pos, destination))} m`;
+  info.classList.remove('hidden');
+}
+
 function handleInteract() {
   const cockpitFrame = document.getElementById('cockpit-frame');
 
@@ -303,6 +370,7 @@ function tick(now) {
   player.updateCamera();
   updatePrompt();
   updateMinimapMarker();
+  updateDestinationInfo();
 
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);

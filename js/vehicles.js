@@ -181,8 +181,11 @@ class Vehicle {
 
     // Ramp jump: once launched (vy set > 0 by updateRampPhysics, after
     // climbing a ramp — see ramps.js), just fall under gravity and land
-    // back on the ground.
-    if (this.y > 0 || this.vy > 0) {
+    // back on the ground. Skipped entirely while still climbing
+    // (this.onRamp) — otherwise this block would fight updateRampPhysics's
+    // own height every frame (each nudging y a different way) and the car
+    // would visibly shake going up the slope.
+    if (!this.onRamp && (this.y > 0 || this.vy > 0)) {
       this.vy -= JUMP_GRAVITY_MPS2 * dt;
       this.y += this.vy * dt;
       if (this.y < 0) {

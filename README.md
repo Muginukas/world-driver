@@ -71,9 +71,11 @@ tai, kur žiūri.
   `TrafficManager` (visų mašinų valdymas, nuolatinio eismo tankio
   palaikymas — kai žaidėjas įlipa į NPC mašiną, jos maršrutas tuoj pat
   papildomas nauja mašina).
-- `js/ramps.js` — kelios rampos šalia starto taško, pasiekiamos raudonu
-  privažiavimo takeliu su "RAMP" ženklu jo pradžioje: užvažiavus mašina
-  kyla į viršų kaip į kalną (aukštis seka rampos paviršių), su apsauginiais
+- `js/ramps.js` — rampos šalia starto taško ir po vieną palei kiekvieną
+  eismo maršrutą (taigi jų sutinki ir važiuodamas tikrais keliais, ne tik
+  prie spawn'o), kiekviena pasiekiama raudonu privažiavimo takeliu su
+  "RAMP" ženklu jo pradžioje: užvažiavus mašina kyla į viršų kaip į kalną
+  (aukštis seka rampos paviršių, be jokio drebėjimo), su apsauginiais
   turėklais iš abiejų pusių, o nuo viršaus nuvažiavus trumpam pakyla į orą
   ir krinta ant žemės (gravitacija).
 - `js/player.js` — tikras pirmo asmens valdiklis: laisvas žvilgsnis
@@ -82,7 +84,9 @@ tai, kur žiūri.
 - `js/hud.js` — greitimatis, prompt'ai.
 - `js/main.js` — Three.js scenos/kameros/renderer'io inicializacija, žaidimo
   ciklas (`requestAnimationFrame`), klaviatūros, pelės (Pointer Lock API) ir
-  jutiklinio ekrano įvesties apdorojimas.
+  jutiklinio ekrano įvesties apdorojimas. Taip pat: paspaudus/palietus
+  žemėlapėlį galima pasižymėti tikslo tašką (mėlynas smeigtukas + atstumas
+  po žemėlapėliu) — kur nori nuvažiuoti.
 
 Three.js įkeliamas per CDN (cdnjs), be jokio rakto.
 

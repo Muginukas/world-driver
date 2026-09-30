@@ -52,7 +52,7 @@ function scatterBuildings(scene, projectedRoutes) {
   const palette = [0xcfd8dc, 0xd7ccc8, 0xb0bec5, 0xffe0b2, 0xc5cae9, 0xb2dfdb];
   const placed = [];
   const colliders = [];
-  const MAX_BUILDINGS = 120;
+  const MAX_BUILDINGS = 220;
   let count = 0;
 
   for (const path of projectedRoutes) {
@@ -70,12 +70,12 @@ function scatterBuildings(scene, projectedRoutes) {
 
       for (const side of [1, -1]) {
         if (count >= MAX_BUILDINGS) break;
-        if (Math.random() > 0.5) continue; // sparser, more natural spacing
+        if (Math.random() > 0.7) continue; // denser than before, still some natural gaps
 
         const offset = 8 + Math.random() * 6; // clear of the road itself
         const pos = { x: mid.x + nx * offset * side, z: mid.z + nz * offset * side };
 
-        if (placed.some((p) => Math.hypot(p.x - pos.x, p.z - pos.z) < 9)) continue;
+        if (placed.some((p) => Math.hypot(p.x - pos.x, p.z - pos.z) < 7)) continue;
         placed.push(pos);
 
         const w = 6 + Math.random() * 6;

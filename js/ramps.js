@@ -21,10 +21,36 @@ const RAMP_APPROACH_LENGTH = 14; // length of the painted red approach lane
 // starts) and `heading` is the climbing direction — same convention as a
 // vehicle's own heading (see geo.js): forwardVec(heading) points the way
 // you drive to climb it.
-const RAMP_SPECS = [
+const RAMP_SPECS_NEAR_SPAWN = [
   { position: { x: 25, z: 20 }, heading: 0 },
   { position: { x: -25, z: 20 }, heading: Math.PI / 2 },
 ];
+
+const RAMP_ROAD_OFFSET = 7; // metres off a road's centerline, clear of ROAD_WIDTH (see world.js)
+const RAMP_ROAD_FRACTION = 0.45; // how far along each route's path to place its ramp
+
+// One ramp per real traffic route, planted just off to the side of the
+// road at a point along its actual path, oriented with the road's local
+// direction there — so driving that route, you run into ramps along the
+// way instead of only finding them back at spawn.
+function buildRoadRampSpecs(projectedRoutes) {
+  const specs = [];
+  for (const path of projectedRoutes) {
+    if (!path || path.length < 4) continue;
+    const i = Math.min(path.length - 2, Math.max(0, Math.floor(path.length * RAMP_ROAD_FRACTION)));
+    const a = path[i];
+    const b = path[i + 1];
+    if (!a || !b || dist2D(a, b) < 0.5) continue;
+
+    const heading = headingTo(a, b);
+    const right = rightVec(heading);
+    specs.push({
+      position: { x: a.x + right.x * RAMP_ROAD_OFFSET, z: a.z + right.z * RAMP_ROAD_OFFSET },
+      heading,
+    });
+  }
+  return specs;
+}
 
 function buildRampSignTexture() {
   const canvas = document.createElement('canvas');
@@ -127,9 +153,12 @@ function buildRampMesh(spec) {
 }
 
 // Returns an array of ramp descriptors used by updateRampPhysics to test
-// a vehicle's position against each ramp's footprint.
-function buildRamps(scene) {
-  return RAMP_SPECS.map((spec) => {
+// a vehicle's position against each ramp's footprint. `projectedRoutes`
+// (the same local-meter paths passed to buildWorld) is used to scatter
+// extra ramps along the actual roads, on top of the two near spawn.
+function buildRamps(scene, projectedRoutes) {
+  const specs = RAMP_SPECS_NEAR_SPAWN.concat(buildRoadRampSpecs(projectedRoutes || []));
+  return specs.map((spec) => {
     scene.add(buildRampMesh(spec));
     return {
       position: spec.position,
@@ -158,6 +187,7 @@ function updateRampPhysics(vehicle, ramps) {
       vehicle.y = (along / RAMP_LENGTH) * RAMP_HEIGHT;
       vehicle.vy = 0;
       vehicle.onRamp = true;
+      vehicle.render(); // apply the corrected height this same frame, not next
       return;
     }
 
@@ -168,6 +198,7 @@ function updateRampPhysics(vehicle, ramps) {
       } else {
         vehicle.y = 0; // backed off the base - back on the ground
       }
+      vehicle.render();
       return;
     }
   }

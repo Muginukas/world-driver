@@ -35,8 +35,10 @@
 
 <!-- Minimap frame (just a border — the actual top-down view is rendered
      into this same rectangle of the WebGL canvas underneath, via a
-     scissored viewport in main.js) -->
+     scissored viewport in main.js). Tapping/clicking inside it sets a
+     destination marker there (see bindMinimapTarget in main.js). -->
 <div id="minimap-frame"></div>
+<div id="destination-info" class="hidden"></div>
 
 <!-- On-screen touch controls (also usable with a mouse on desktop) -->
 <div id="touch-controls">
