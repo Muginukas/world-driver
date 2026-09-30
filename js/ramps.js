@@ -6,9 +6,11 @@
 const RAMP_LENGTH = 10;
 const RAMP_WIDTH = 6;
 const RAMP_THICKNESS = 0.4;
-const RAMP_TILT = 0.32; // radians, ramp surface incline
+const RAMP_TILT = 0.5; // radians, ramp surface incline — steeper/taller than before
+const RAMP_RAIL_HEIGHT = 0.9; // side guard rails, tall enough you can't drive off the edge
+const RAMP_RAIL_THICKNESS = 0.25;
 const RAMP_TRIGGER_RADIUS = 3.5; // metres from the ramp's far (launch) edge
-const RAMP_LAUNCH_VY = 8; // m/s upward, at launch
+const RAMP_LAUNCH_VY = 12; // m/s upward, at launch — a proper hop, more air time
 
 // Placed just off to the side of the spawn point, clear of the parked
 // cars there, each facing a direction that's easy to line up with while
@@ -58,21 +60,37 @@ function buildRampSign() {
 
 // A simplified tilted ramp: a thick box pitched up at RAMP_TILT, its
 // near edge resting on the ground and its far edge raised — enough to
-// launch a car driving up it without needing a true wedge mesh.
+// launch a car driving up it without needing a true wedge mesh. Side
+// guard rails run the full length of the ramp surface (tilted together
+// with it, as children of the same pitched group) so the car can't
+// drive off the edge on the way up.
 function buildRampMesh(spec) {
   const group = new THREE.Group();
   group.position.set(spec.position.x, 0, spec.position.z);
   group.rotation.order = 'YXZ';
   group.rotation.y = spec.heading;
 
+  const riseCenter = Math.sin(RAMP_TILT) * (RAMP_LENGTH / 2);
+  const surface = new THREE.Group();
+  surface.position.set(0, riseCenter / 2, 0);
+  surface.rotation.x = RAMP_TILT;
+  group.add(surface);
+
   const ramp = new THREE.Mesh(
     new THREE.BoxGeometry(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH),
     new THREE.MeshLambertMaterial({ color: 0x888888 })
   );
-  const riseCenter = Math.sin(RAMP_TILT) * (RAMP_LENGTH / 2);
-  ramp.position.set(0, riseCenter / 2, 0);
-  ramp.rotation.x = RAMP_TILT;
-  group.add(ramp);
+  surface.add(ramp);
+
+  const railMat = new THREE.MeshLambertMaterial({ color: 0xcc3b30 });
+  const railGeo = new THREE.BoxGeometry(RAMP_RAIL_THICKNESS, RAMP_RAIL_HEIGHT, RAMP_LENGTH);
+  const railOffsetX = RAMP_WIDTH / 2 + RAMP_RAIL_THICKNESS / 2;
+  const railY = RAMP_THICKNESS / 2 + RAMP_RAIL_HEIGHT / 2;
+  [-1, 1].forEach((side) => {
+    const rail = new THREE.Mesh(railGeo, railMat);
+    rail.position.set(railOffsetX * side, railY, 0);
+    surface.add(rail);
+  });
 
   const sign = buildRampSign();
   const right = rightVec(spec.heading);
