@@ -20,7 +20,7 @@ const TRAFFIC_ROUTES = [
   { origin: { lat: 54.6790, lng: 25.3050 }, destination: { lat: 54.6820, lng: 25.2940 } }, // Paupys -> Užupis
 ];
 
-const CARS_PER_ROUTE = 2;
+const CARS_PER_ROUTE = 4;
 
 // Cars parked right at the player's spawn point, free to be driven
 // off-route as soon as they're entered.
@@ -28,6 +28,8 @@ const PARKED_CARS = [
   { lat: 54.6872, lng: 25.2660 },
   { lat: 54.6866, lng: 25.2645 },
   { lat: 54.6878, lng: 25.2638 },
+  { lat: 54.6874, lng: 25.2670 },
+  { lat: 54.6862, lng: 25.2655 },
 ];
 
 const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';

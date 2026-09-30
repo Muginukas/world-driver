@@ -71,9 +71,11 @@ tai, kur žiūri.
   `TrafficManager` (visų mašinų valdymas, nuolatinio eismo tankio
   palaikymas — kai žaidėjas įlipa į NPC mašiną, jos maršrutas tuoj pat
   papildomas nauja mašina).
-- `js/ramps.js` — kelios trampliną primenančios rampos šalia starto taško
-  su geltonu "RAMP" ženklu: pervažiavus per rampą pakankamu greičiu,
-  mašina pakyla į orą (gravitacija) ir vėl nusileidžia ant žemės.
+- `js/ramps.js` — kelios rampos šalia starto taško, pasiekiamos raudonu
+  privažiavimo takeliu su "RAMP" ženklu jo pradžioje: užvažiavus mašina
+  kyla į viršų kaip į kalną (aukštis seka rampos paviršių), su apsauginiais
+  turėklais iš abiejų pusių, o nuo viršaus nuvažiavus trumpam pakyla į orą
+  ir krinta ant žemės (gravitacija).
 - `js/player.js` — tikras pirmo asmens valdiklis: laisvas žvilgsnis
   (yaw+pitch) nepriklausomai nuo judėjimo krypties, 3D rankų "viewmodel"
   su siūbavimo animacija vaikščiojant, prietaisų skydelis/vairas vairuojant.
@@ -105,9 +107,10 @@ atsiranda nauja — eismo tankis nekrenta.
   šiam prototipui, bet ribotas (rate limit) ir netinkamas rimtai
   produkcijai; jei reikės daugiau maršrutų ar dažnesnių užklausų, verta
   pasikelti savo OSRM instanciją.
-- Nėra susidūrimų fizikos tarp automobilių ar su pastatais/žeme — žaidimas
-  be "sienų", mašinos ir žaidėjas gali važiuoti/vaikščioti bet kur (net per
-  pastatus).
+- Vairuojama mašina susiduria su pastatais (paprastas apskritimo prieš
+  pasuktą stačiakampį testas — atsitrenkus mašina tiesiog sustoja), bet
+  nėra susidūrimų tarp pačių automobilių, ir žaidėjas pėsčiomis gali
+  vaikščioti per pastatus.
 - Grafika yra sąmoningai paprasta/blokinė (dėžutės, plokšti flat-shading
   spalvos) — tai atitinka "Roblox stiliaus" estetiką, o ne fotorealizmą, ir
   gerai veikia telefonuose.

@@ -30,7 +30,7 @@ function buildWorld(scene, projectedRoutes) {
     }
   });
 
-  scatterBuildings(scene, projectedRoutes);
+  return scatterBuildings(scene, projectedRoutes);
 }
 
 function addRoadSegment(scene, mat, a, b, width) {
@@ -45,9 +45,13 @@ function addRoadSegment(scene, mat, a, b, width) {
   scene.add(mesh);
 }
 
+// Returns a list of building colliders {x, z, hw, hd, rotY} — each box's
+// half-width/half-depth in its own (rotated) local frame — used by
+// vehicles.js to stop a driven car from passing through a building.
 function scatterBuildings(scene, projectedRoutes) {
   const palette = [0xcfd8dc, 0xd7ccc8, 0xb0bec5, 0xffe0b2, 0xc5cae9, 0xb2dfdb];
   const placed = [];
+  const colliders = [];
   const MAX_BUILDINGS = 120;
   let count = 0;
 
@@ -80,12 +84,16 @@ function scatterBuildings(scene, projectedRoutes) {
         const mat = new THREE.MeshLambertMaterial({
           color: palette[Math.floor(Math.random() * palette.length)],
         });
+        const rotY = Math.random() * Math.PI;
         const building = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
         building.position.set(pos.x, h / 2, pos.z);
-        building.rotation.y = Math.random() * Math.PI;
+        building.rotation.y = rotY;
         scene.add(building);
+        colliders.push({ x: pos.x, z: pos.z, hw: w / 2, hd: d / 2, rotY });
         count++;
       }
     }
   }
+
+  return colliders;
 }

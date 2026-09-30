@@ -17,6 +17,28 @@ const DRIVE_TURN_FULL_SPEED_MPS = 10; // speed at which steering reaches full au
 
 const JUMP_GRAVITY_MPS2 = 18; // only applied while airborne (see ramps.js)
 
+const CAR_COLLISION_RADIUS = 1.6; // rough car half-size, for simple circle-vs-box building collision
+
+// Point (x, z) vs. a list of building colliders {x, z, hw, hd, rotY} (see
+// world.js) — each building is an axis-aligned box in its own rotated
+// local frame, so the point is rotated into that frame before the box
+// test. Used to stop a driven car dead instead of letting it drive
+// through a building.
+function collidesWithBuilding(x, z, buildings) {
+  for (const b of buildings) {
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const cos = Math.cos(b.rotY);
+    const sin = Math.sin(b.rotY);
+    const localX = dx * cos - dz * sin;
+    const localZ = dx * sin + dz * cos;
+    if (Math.abs(localX) <= b.hw + CAR_COLLISION_RADIUS && Math.abs(localZ) <= b.hd + CAR_COLLISION_RADIUS) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Simple blocky "Roblox-style" car: a body box, a lighter cabin box, and
 // four dark wheel boxes. Modeled with its nose toward local -Z, matching
 // forwardVec(0) — i.e. heading 0 means facing local -Z.
@@ -61,6 +83,7 @@ class Vehicle {
     this.speed = 0; // signed, m/s (negative = reversing)
     this.y = 0; // height off the ground, for ramp jumps (see ramps.js)
     this.vy = 0; // vertical speed, m/s
+    this.onRamp = false; // true while climbing a ramp's sloped surface (see ramps.js)
     this.color = colorHex;
 
     // NPC route state (null when parked / player-controlled)
@@ -116,7 +139,10 @@ class Vehicle {
   }
 
   // Manual driving physics, used while the player is inside this vehicle.
-  updateDriven(dt, keys) {
+  // `buildings`, if given, is the list of building colliders from
+  // world.js — driving into one stops the car dead instead of passing
+  // through it.
+  updateDriven(dt, keys, buildings) {
     const throttle = keys.has('w') || keys.has('arrowup');
     const brake = keys.has('s') || keys.has('arrowdown');
     const left = keys.has('a') || keys.has('arrowleft');
@@ -143,13 +169,19 @@ class Vehicle {
 
     if (Math.abs(this.speed) > 0.001) {
       const fwd = forwardVec(this.heading);
-      this.position.x += fwd.x * this.speed * dt;
-      this.position.z += fwd.z * this.speed * dt;
+      const nextX = this.position.x + fwd.x * this.speed * dt;
+      const nextZ = this.position.z + fwd.z * this.speed * dt;
+      if (buildings && collidesWithBuilding(nextX, nextZ, buildings)) {
+        this.speed = 0; // crashed - stop dead instead of driving through it
+      } else {
+        this.position.x = nextX;
+        this.position.z = nextZ;
+      }
     }
 
-    // Ramp jump: once launched (vy set > 0 by checkRampLaunch), just fall
-    // under gravity and land back on the ground — no collision, purely a
-    // playful hop.
+    // Ramp jump: once launched (vy set > 0 by updateRampPhysics, after
+    // climbing a ramp — see ramps.js), just fall under gravity and land
+    // back on the ground.
     if (this.y > 0 || this.vy > 0) {
       this.vy -= JUMP_GRAVITY_MPS2 * dt;
       this.y += this.vy * dt;
