@@ -38,6 +38,20 @@ const HUD = {
     this.hurtTimer = setTimeout(() => el.classList.remove('show'), 180);
   },
 
+  updateGuards(n) {
+    if (!this.guardsEl) this.guardsEl = document.getElementById('guard-count');
+    this.guardsEl.textContent = n;
+  },
+
+  // A short message in the middle of the screen for a couple of seconds.
+  toast(text) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+  },
+
   showDeath(show) {
     document.getElementById('death-overlay').classList.toggle('hidden', !show);
   },

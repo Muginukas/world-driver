@@ -31,6 +31,7 @@
 <div id="topbar">
   <span id="mode-label">Vaikščiojimas</span>
   <span id="health-wrap">❤ <span id="health"><span id="health-fill"></span></span></span>
+  <span id="guards-wrap">🛡 <span id="guard-count">3</span></span>
 </div>
 
 <!-- Minimap frame (just a border — the actual top-down view is rendered
@@ -54,6 +55,20 @@
   <button id="btn-zoom-out" class="side-btn" aria-label="Nutolinti">−</button>
 </div>
 
+<!-- Travel menu (opens when you tap the minimap) -->
+<div id="travel-panel" class="hidden">
+  <div class="travel-box">
+    <div class="travel-head">
+      <h2>Kur keliausim?</h2>
+      <button id="travel-close" aria-label="Uždaryti">✕</button>
+    </div>
+    <div id="travel-list"></div>
+    <button id="travel-clear">Panaikinti tikslą</button>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
 <!-- Red flash when you get hit -->
 <div id="hurt-flash"></div>
 
@@ -75,7 +90,8 @@
     <p>Tu esi mažas žmogeliukas — matai save iš už nugaros. Bėgti gali iki 50 km/h, kaip mašina.
        Priėjęs prie bet kurios mašinos paspausk veiksmo mygtuką ir vairuok.</p>
     <p>Paskui tave visur eina trys <b>sargai</b> (juodi kostiumai, akiniai) ir tave saugo.
-       Mieste slankioja <b>blogiečiai</b> (kaukės, raudonos akys) — pamatę puola.
+       Mieste slankioja <b>blogiečių gaujos po 10</b> (kaukės, raudonos akys) — pamatę puola, kartais nugali ir sargą.</p>
+    <p><b>Paspausk žemėlapį</b> ir nukeliauk prie Eifelio bokšto, Big Beno, Drakono tilto ar Ponios Budos.
        Pabėk, mušk juos veiksmo mygtuku, leisk sargams juos sutvarkyti arba pervažiuok mašina.</p>
     <p><b>Kompiuteryje:</b> WASD — judėti, pelė (spausk ekraną) — žvilgsnis, rodyklės — žvilgsnis, E — įlipti/išlipti, V — vaizdas iš akių / iš už nugaros, pelės ratukas — arčiau / toliau<br>
        <b>Telefone:</b> rodyklių mygtukai kairėje — judėti, brauk pirštu ekrane — žvilgsnis, du pirštai — suspausk/išskėsk arčiau/toliau ir pasuk vaizdą, mygtukas dešinėje — įlipti/išlipti, 👁 — keisti vaizdą, + / − — arčiau / toliau</p>
@@ -88,6 +104,7 @@
 <script src="js/routes.js"></script>
 <script src="js/world.js"></script>
 <script src="js/ramps.js"></script>
+<script src="js/landmarks.js"></script>
 <script src="js/vehicles.js"></script>
 <script src="js/pedestrians.js"></script>
 <script src="js/player.js"></script>

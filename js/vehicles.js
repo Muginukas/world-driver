@@ -274,6 +274,15 @@ class TrafficManager {
     return best;
   }
 
+  // A parked car (free to drive) at `pos`, facing `heading`.
+  addParked(pos, heading = 0) {
+    const color = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
+    const v = new Vehicle(this.scene, pos, color);
+    v.heading = heading;
+    v.render();
+    this.vehicles.push(v);
+  }
+
   onVehicleEntered(vehicle) {
     vehicle.driven = true;
     // Pull it out of ambient NPC rotation and replace it so traffic

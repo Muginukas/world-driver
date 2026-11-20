@@ -7,8 +7,9 @@ let renderer, scene, camera, player, traffic, pedestrians, combat;
 let minimapCamera, playerMarker;
 let ramps = [];
 let buildings = [];
-let destination = null; // {x, z} in local meters, set by tapping the minimap
-let destinationMarker;
+let destination = null; // a DESTINATIONS entry (landmarks.js) you're heading to, or null
+let destinationMarker, destinationBeacon;
+let landmarks = null;
 let lastFrameTime = null;
 let pointerLocked = false;
 
@@ -54,7 +55,18 @@ function buildPlayerMarker() {
   return group;
 }
 
-// A pin marking a destination the player tapped on the minimap. Lives on
+// A tall see-through light column over your destination, visible from
+// far away in the main view (fog off) so you can find your way to it.
+function buildDestinationBeacon() {
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2, 400, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x2fb4ff, transparent: true, opacity: 0.3, fog: false, depthWrite: false, side: THREE.DoubleSide })
+  );
+  beam.position.y = 200;
+  return beam;
+}
+
+// A pin marking your destination on the minimap. Lives on
 // layer 1 only, like playerMarker — visible on the minimap, not in the
 // main first-person view.
 function buildDestinationMarker() {
@@ -76,7 +88,7 @@ function buildDestinationMarker() {
 
 function initGame() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 400);
+  camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 1200);
   // The camera must be in the scene for its children (first-person hands,
   // car dashboard — see player.js) to be rendered.
   scene.add(camera);
@@ -109,13 +121,19 @@ function initGame() {
   destinationMarker = buildDestinationMarker();
   destinationMarker.visible = false;
   scene.add(destinationMarker);
+  destinationBeacon = buildDestinationBeacon();
+  destinationBeacon.visible = false;
+  scene.add(destinationBeacon);
 
   resolveTrafficRoutes((latLngPaths) => {
     const projected = latLngPaths.map((path) => path.map((p) => toLocal(START_POSITION, p)));
     const parkedLocal = PARKED_CARS.map((p) => toLocal(START_POSITION, p));
     ramps = buildRamps(scene, projected);
-    buildings = buildWorld(scene, projected, buildKeepClear(parkedLocal, ramps));
+    const cityIndex = buildWorld(scene, projected, buildKeepClear(parkedLocal, ramps));
+    landmarks = buildLandmarkZones(scene);
+    buildings = makeBuildingIndex(cityIndex.list.concat(landmarks.colliders));
     traffic.init(projected, parkedLocal);
+    landmarks.parkedCars.forEach((c) => traffic.addParked(c, c.heading));
     pedestrians.init(buildings);
     combat.init(buildings);
   });
@@ -126,7 +144,7 @@ function initGame() {
   bindInput();
   bindTouchControls();
   bindLookZone();
-  bindMinimapTarget();
+  bindTravelMenu();
   bindZoom();
   bindRespawn();
 
@@ -167,7 +185,7 @@ function bindZoom() {
 function bindRespawn() {
   document.getElementById('respawn-btn').addEventListener('click', () => {
     player.respawn({ x: 0, z: 0 });
-    combat.onPlayerRespawn(buildings);
+    combat.onPlayerMoved(buildings);
     HUD.showDeath(false);
   });
 }
@@ -333,33 +351,76 @@ function bindLookZone() {
   zone.addEventListener('touchcancel', release);
 }
 
-// Tapping/clicking inside the minimap sets a destination there: the tap
-// position within the minimap's on-screen rect maps directly to a world
-// offset from the player, since the minimap camera is a fixed north-up
-// orthographic view centered on the player each frame (screen right =
-// world +X, screen top = world -Z — see updateMinimapMarker/renderMinimap).
-function bindMinimapTarget() {
+// Tapping the minimap opens the travel menu: pick a world landmark
+// (landmarks.js) and you travel there — with your car if you're driving,
+// and your guards — arriving on a street nearby with the landmark marked
+// as your destination (minimap pin, light beam, distance and arrow).
+function bindTravelMenu() {
   const frame = document.getElementById('minimap-frame');
+  const panel = document.getElementById('travel-panel');
+  const list = document.getElementById('travel-list');
 
-  const setFromClient = (clientX, clientY) => {
-    const rect = frame.getBoundingClientRect();
-    const u = ((clientX - rect.left) / rect.width) * 2 - 1;
-    const v = ((clientY - rect.top) / rect.height) * 2 - 1;
-    const pos = player.isDriving ? player.vehicle.position : player.position;
-    destination = {
-      x: pos.x + u * MINIMAP_VIEW_HALF,
-      z: pos.z + v * MINIMAP_VIEW_HALF,
-    };
-    destinationMarker.position.set(destination.x, 0, destination.z);
-    destinationMarker.visible = true;
-  };
+  DESTINATIONS.forEach((d) => {
+    const card = document.createElement('button');
+    card.className = 'travel-card';
+    card.innerHTML = `<span class="travel-emoji">${d.emoji}</span>
+      <span class="travel-text"><b>${d.name}</b>${d.place ? `<small>${d.place}</small>` : ''}<em>${d.fact}</em></span>`;
+    card.addEventListener('click', () => {
+      travelTo(d);
+      panel.classList.add('hidden');
+    });
+    list.appendChild(card);
+  });
 
-  frame.addEventListener('click', (e) => setFromClient(e.clientX, e.clientY));
-  frame.addEventListener('touchstart', (e) => {
+  const open = (e) => {
     e.preventDefault();
-    const t = e.changedTouches[0];
-    setFromClient(t.clientX, t.clientY);
-  }, { passive: false });
+    panel.classList.remove('hidden');
+  };
+  frame.addEventListener('click', open);
+  frame.addEventListener('touchstart', open, { passive: false });
+  document.getElementById('travel-close').addEventListener('click', () => panel.classList.add('hidden'));
+  document.getElementById('travel-clear').addEventListener('click', () => {
+    setDestination(null);
+    panel.classList.add('hidden');
+  });
+}
+
+function setDestination(d) {
+  destination = d;
+  destinationMarker.visible = !!d;
+  destinationBeacon.visible = !!d;
+  if (d) {
+    destinationMarker.position.set(d.pos.x, 0, d.pos.z);
+    destinationBeacon.position.x = d.pos.x;
+    destinationBeacon.position.z = d.pos.z;
+  }
+}
+
+function travelTo(d) {
+  if (player.dead) return;
+  const here = zoneAt(player.isDriving ? player.vehicle.position : player.position);
+  if (here.id !== d.zone) {
+    // Different city: jump straight to the arrival street, facing the landmark.
+    const heading = headingTo(d.arrival, d.pos);
+    if (player.isDriving) {
+      const v = player.vehicle;
+      v.position = { x: d.arrival.x, z: d.arrival.z };
+      v.heading = heading;
+      v.speed = 0;
+      v.y = 0;
+      v.vy = 0;
+      v.render();
+      player.driveLookYaw = 0;
+    } else {
+      player.position = { x: d.arrival.x, z: d.arrival.z };
+      player.speed = 0;
+      player.yaw = heading;
+      player.avatarHeading = heading;
+    }
+    combat.onPlayerMoved(buildings);
+    HUD.toast(`${d.emoji} Atkeliavai: ${zoneById(d.zone).name}!`);
+  }
+  setDestination(d.id === 'vilnius' && here.id === 'vilnius' ? null : d);
 }
 
 function updateDestinationInfo() {
@@ -369,7 +430,16 @@ function updateDestinationInfo() {
     return;
   }
   const pos = player.isDriving ? player.vehicle.position : player.position;
-  info.textContent = `Tikslas: ${Math.round(dist2D(pos, destination))} m`;
+  const dist = dist2D(pos, destination.pos);
+  if (dist < 45) {
+    HUD.toast(`${destination.emoji} Atvykai prie: ${destination.name}!`);
+    setDestination(null);
+    info.classList.add('hidden');
+    return;
+  }
+  // Arrow pointing toward the destination relative to where the camera looks.
+  const rel = headingTo(pos, destination.pos) - camera.rotation.y;
+  info.innerHTML = `<span class="dest-arrow" style="transform: rotate(${-rel}rad)">⬆</span> ${destination.emoji} ${destination.name} · ${Math.round(dist)} m`;
   info.classList.remove('hidden');
 }
 
@@ -477,6 +547,14 @@ function tick(now) {
   pedestrians.update(dt, player.isDriving ? player.vehicle : null, viewerPos, buildings);
   combat.update(dt, { car: player.isDriving ? player.vehicle : null, viewerPos, buildings });
   HUD.updateHealth(player.health);
+  HUD.updateGuards(combat.guardsStanding);
+  if (landmarks) landmarks.update(dt);
+  // Clearer air in the landmark cities, so the towers show from afar.
+  const inVilnius = zoneAt(viewerPos).id === 'vilnius';
+  if (scene.fog) {
+    scene.fog.near = inVilnius ? 60 : 150;
+    scene.fog.far = inVilnius ? 260 : 900;
+  }
 
   player.updateCamera();
   updatePrompt();

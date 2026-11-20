@@ -46,7 +46,7 @@ function buildWorld(scene, projectedRoutes, keepClear = []) {
   scene.add(sun);
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(4000, 4000),
+    new THREE.PlaneGeometry(30000, 30000), // big enough for the far-away landmark cities too
     new THREE.MeshLambertMaterial({ color: 0x7ec850 })
   );
   ground.rotation.x = -Math.PI / 2;
