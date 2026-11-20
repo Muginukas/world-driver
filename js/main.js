@@ -256,53 +256,81 @@ function bindTouchControls() {
   viewBtn.addEventListener('click', () => player.toggleView());
 }
 
-// Touch-drag anywhere on screen looks around (like mouse-look on
-// desktop). The D-pad/action button sit visually on top of this layer,
-// so touches starting on them go to their own handlers instead.
+// Touch anywhere on screen to control the camera:
+//   - one finger drag: look around (like mouse-look on desktop)
+//   - two fingers: pinch to zoom in/out, and drag both to turn the view
+// The D-pad/action buttons sit on top of this layer, so touches starting
+// on them go to their own handlers instead.
 //
-// Tracked by the specific finger's touch identifier, not just "how many
-// touches are on screen" — e.touches counts every active touch on the
-// whole page, so holding a D-pad button (1 touch there) while dragging
-// to look (a 2nd finger, here) must not get rejected just because the
-// page-wide total is 2.
+// Fingers are tracked by touch identifier, not by e.touches — that counts
+// every touch on the whole page, so holding a D-pad button while dragging
+// here with another finger must still count as a one-finger look drag.
 function bindLookZone() {
   const zone = document.getElementById('look-zone');
-  let activeTouchId = null;
-  let last = null;
+  const fingers = new Map(); // identifier -> {x, y}
+  let pinchDist = null;
+  let pinchMid = null;
 
-  const findTouch = (touchList, id) => {
-    for (let i = 0; i < touchList.length; i++) {
-      if (touchList[i].identifier === id) return touchList[i];
+  const twoFingerState = () => {
+    const [a, b] = [...fingers.values()];
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    };
+  };
+
+  const resetPinch = () => {
+    if (fingers.size >= 2) {
+      const st = twoFingerState();
+      pinchDist = st.dist;
+      pinchMid = st.mid;
+    } else {
+      pinchDist = null;
+      pinchMid = null;
     }
-    return null;
   };
 
   zone.addEventListener('touchstart', (e) => {
-    if (activeTouchId !== null) return; // already tracking a look-drag finger
-    const t = e.changedTouches[0];
-    activeTouchId = t.identifier;
-    last = { x: t.clientX, y: t.clientY };
-  }, { passive: true });
-
-  zone.addEventListener('touchmove', (e) => {
-    if (activeTouchId === null) return;
-    const t = findTouch(e.changedTouches, activeTouchId);
-    if (!t) return; // this event is about some other finger
-    const dx = t.clientX - last.x;
-    const dy = t.clientY - last.y;
-    last = { x: t.clientX, y: t.clientY };
-    player.look(-dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
+    for (const t of e.changedTouches) {
+      if (fingers.size < 2) fingers.set(t.identifier, { x: t.clientX, y: t.clientY });
+    }
+    resetPinch();
     e.preventDefault();
   }, { passive: false });
 
-  const releaseIfOurs = (e) => {
-    if (findTouch(e.changedTouches, activeTouchId)) {
-      activeTouchId = null;
-      last = null;
+  zone.addEventListener('touchmove', (e) => {
+    let lookDx = 0;
+    let lookDy = 0;
+    for (const t of e.changedTouches) {
+      const f = fingers.get(t.identifier);
+      if (!f) continue; // some other finger (e.g. one on the D-pad)
+      if (fingers.size === 1) {
+        lookDx += t.clientX - f.x;
+        lookDy += t.clientY - f.y;
+      }
+      f.x = t.clientX;
+      f.y = t.clientY;
     }
+
+    if (fingers.size >= 2 && pinchDist) {
+      const st = twoFingerState();
+      if (st.dist > 10) player.zoom(pinchDist / st.dist); // fingers apart = closer
+      lookDx = st.mid.x - pinchMid.x;
+      lookDy = st.mid.y - pinchMid.y;
+      pinchDist = st.dist;
+      pinchMid = st.mid;
+    }
+
+    if (lookDx || lookDy) player.look(-lookDx * TOUCH_LOOK_SENSITIVITY, -lookDy * TOUCH_LOOK_SENSITIVITY);
+    e.preventDefault();
+  }, { passive: false });
+
+  const release = (e) => {
+    for (const t of e.changedTouches) fingers.delete(t.identifier);
+    resetPinch();
   };
-  zone.addEventListener('touchend', releaseIfOurs);
-  zone.addEventListener('touchcancel', releaseIfOurs);
+  zone.addEventListener('touchend', release);
+  zone.addEventListener('touchcancel', release);
 }
 
 // Tapping/clicking inside the minimap sets a destination there: the tap
@@ -456,7 +484,10 @@ function tick(now) {
   updateDestinationInfo();
 
   renderer.setScissorTest(false);
-  renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);
+  // three.js viewport/scissor take CSS pixels and apply the pixel ratio
+  // themselves — passing device pixels here zoomed the view 2-3x on
+  // phones (you only saw the bottom-left corner, without your character).
+  renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
   renderer.render(scene, camera);
 
   renderMinimap();
@@ -476,10 +507,10 @@ function updateMinimapMarker() {
 }
 
 function renderMinimap() {
-  const dpr = renderer.getPixelRatio();
-  const size = MINIMAP_SIZE * dpr;
-  const x = MINIMAP_MARGIN_LEFT * dpr;
-  const y = renderer.domElement.height - MINIMAP_MARGIN_TOP * dpr - size; // CSS top -> WebGL bottom-left origin
+  // CSS pixels (see the note in tick); WebGL's origin is bottom-left.
+  const size = MINIMAP_SIZE;
+  const x = MINIMAP_MARGIN_LEFT;
+  const y = window.innerHeight - MINIMAP_MARGIN_TOP - size;
 
   renderer.setViewport(x, y, size, size);
   renderer.setScissor(x, y, size, size);

@@ -341,3 +341,9 @@ html, body {
 #start-btn:hover {
   background: #2563eb;
 }
+
+/* Narrow phone screens: keep the top bar clear of the speedometer. */
+@media (max-width: 480px) {
+  #mode-label { display: none; }
+  #health { width: 70px; }
+}
