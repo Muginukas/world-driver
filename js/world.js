@@ -20,6 +20,15 @@ const ROADSIDE_SPACING = 12; // metres between roadside building slots
 const FILL_RADIUS = 340; // fill the blocks between roads within this distance of spawn
 const FILL_SPACING = 17;
 const FILL_PLAZA_RADIUS = 75; // keep an open square around the spawn (Lukiškės Sq.) and its parked cars
+
+// Drive-through lanes: a grid of open asphalt streets cut through the
+// city blocks around the spawn, so the dense buildings still leave room
+// to drive (and walk) between them. Lines run along x = k*SPACING and
+// z = k*SPACING inside a square of +/- LANE_EXTENT.
+const LANE_SPACING = 68;
+const LANE_HALF_WIDTH = 6;
+const LANE_EXTENT = 420;
+const DRIVEWAY_CHANCE = 0.2; // chance a roadside slot is left open as a gap
 const MAX_BUILDINGS = 4000;
 
 const BUILDING_PALETTE = [
@@ -44,6 +53,7 @@ function buildWorld(scene, projectedRoutes, keepClear = []) {
   scene.add(ground);
 
   addRoads(scene, projectedRoutes);
+  addLanes(scene);
   const roadIndex = buildRoadIndex(projectedRoutes);
   return placeBuildings(scene, projectedRoutes, roadIndex, keepClear);
 }
@@ -88,6 +98,30 @@ function addRoads(scene, projectedRoutes) {
   walk.frustumCulled = false;
   scene.add(walk);
   scene.add(road);
+}
+
+function distToLaneLine(v) {
+  return Math.abs(v - Math.round(v / LANE_SPACING) * LANE_SPACING);
+}
+
+function onLane(x, z) {
+  if (Math.abs(x) > LANE_EXTENT || Math.abs(z) > LANE_EXTENT) return false;
+  return distToLaneLine(x) < LANE_HALF_WIDTH || distToLaneLine(z) < LANE_HALF_WIDTH;
+}
+
+function addLanes(scene) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x5c5c5c });
+  const kMax = Math.floor(LANE_EXTENT / LANE_SPACING);
+  for (let k = -kMax; k <= kMax; k++) {
+    const alongX = new THREE.Mesh(new THREE.PlaneGeometry(LANE_EXTENT * 2, LANE_HALF_WIDTH * 2 - 2), mat);
+    alongX.rotation.x = -Math.PI / 2;
+    alongX.position.set(0, 0.02, k * LANE_SPACING);
+    scene.add(alongX);
+    const alongZ = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF_WIDTH * 2 - 2, LANE_EXTENT * 2), mat);
+    alongZ.rotation.x = -Math.PI / 2;
+    alongZ.position.set(k * LANE_SPACING, 0.03, 0);
+    scene.add(alongZ);
+  }
 }
 
 // Spatial hash of road segments, so "how far is this point from the
@@ -156,7 +190,7 @@ function randomBuildingHeight() {
   return 5 + Math.random() * 8;
 }
 
-// Returns a list of building colliders {x, z, hw, hd, rotY} — each box's
+// Returns a building index (see makeBuildingIndex) over colliders {x, z, hw, hd, rotY} — each box's
 // half-width/half-depth in its own (rotated) local frame — used by
 // vehicles.js/player.js to stop you passing through a building.
 // `keepClear` is a list of {x, z, r} circles (spawn, parked cars, ramps)
@@ -197,6 +231,7 @@ function placeBuildings(scene, projectedRoutes, roadIndex, keepClear) {
         const wx = b.x + lx * cos + lz * sin;
         const wz = b.z - lx * sin + lz * cos;
         if (roadIndex.minDist(wx, wz, ROAD_CLEARANCE) < ROAD_CLEARANCE) return false;
+        if (onLane(wx, wz)) return false;
       }
     }
     return true;
@@ -231,6 +266,7 @@ function placeBuildings(scene, projectedRoutes, roadIndex, keepClear) {
         const px = a.x + dirX * s;
         const pz = a.z + dirZ * s;
         for (const side of [1, -1]) {
+          if (Math.random() < DRIVEWAY_CHANCE) continue; // leave a gap to drive through
           let off = BUILDING_SETBACK;
           for (let row = 0; row < 2; row++) {
             const w = 7 + Math.random() * 7; // across the road
@@ -289,5 +325,36 @@ function placeBuildings(scene, projectedRoutes, roadIndex, keepClear) {
   mesh.frustumCulled = false;
   scene.add(mesh);
 
-  return list.map((b) => ({ x: b.x, z: b.z, hw: b.w / 2, hd: b.d / 2, rotY: b.rotY }));
+  return makeBuildingIndex(list.map((b) => ({ x: b.x, z: b.z, hw: b.w / 2, hd: b.d / 2, rotY: b.rotY })));
+}
+
+// Spatial hash over the building colliders, so collision checks (cars,
+// you, and every little person every frame) only test the few buildings
+// nearby instead of all thousands. near(x, z) returns the buildings that
+// could touch anything within ~2 m of that point.
+const BUILDING_CELL = 20;
+const NO_BUILDINGS = [];
+
+function makeBuildingIndex(colliders) {
+  const cells = new Map();
+  for (const b of colliders) {
+    const r = Math.hypot(b.hw, b.hd) + 2;
+    const x0 = Math.floor((b.x - r) / BUILDING_CELL);
+    const x1 = Math.floor((b.x + r) / BUILDING_CELL);
+    const z0 = Math.floor((b.z - r) / BUILDING_CELL);
+    const z1 = Math.floor((b.z + r) / BUILDING_CELL);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cz = z0; cz <= z1; cz++) {
+        const key = cx + ',' + cz;
+        if (!cells.has(key)) cells.set(key, []);
+        cells.get(key).push(b);
+      }
+    }
+  }
+  return {
+    list: colliders,
+    near(x, z) {
+      return cells.get(Math.floor(x / BUILDING_CELL) + ',' + Math.floor(z / BUILDING_CELL)) || NO_BUILDINGS;
+    },
+  };
 }

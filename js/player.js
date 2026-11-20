@@ -1,4 +1,4 @@
-// The player: a blocky little person you see from behind (third-person,
+// The player: a small blocky person you see from behind (third-person,
 // the default) or through their own eyes (first-person) — toggle with V
 // or the 👁 button. Free mouse/touch look (yaw+pitch) works the same
 // whether walking or driving. On foot you can run up to 50 km/h, same as
@@ -9,22 +9,35 @@
 const WALK_MAX_SPEED_MPS = 50 / 3.6; // 50 km/h, same as the cars
 const WALK_ACCEL = 16; // m/s^2 — full speed in under a second
 const WALK_DECEL = 30;
-const PLAYER_RADIUS = 0.45; // for building collision on foot
-const EYE_HEIGHT = 1.8;
+const PLAYER_RADIUS = 0.3; // for building collision on foot
+const EYE_HEIGHT = 1.15; // you're a small figure now (see PERSON_SCALE)
 const DRIVE_EYE_HEIGHT = 1.15; // seated in the cabin, not standing above it
 const DRIVE_SEAT_FORWARD_OFFSET = 0.5; // toward the windshield, off the car's center
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
-const THIRD_PERSON_DIST = 4.5;
-const THIRD_PERSON_TARGET_HEIGHT = 1.7;
-const DRIVE_THIRD_PERSON_DIST = 8;
-const DRIVE_THIRD_PERSON_TARGET_HEIGHT = 1.5;
-const THIRD_PITCH_MIN = -1.3; // looking down from above
+// Third-person camera distances; zoom (+/- buttons, mouse wheel) moves
+// between the min and max. Getting into a car pulls the camera up high
+// and far back so you see the car and the streets around it.
+const WALK_CAM_DIST_DEFAULT = 5;
+const WALK_CAM_PITCH = -0.35; // a little above, looking down past your guards
+const WALK_CAM_DIST_MIN = 1.2;
+const WALK_CAM_DIST_MAX = 45;
+const DRIVE_CAM_DIST_DEFAULT = 15;
+const DRIVE_CAM_DIST_MIN = 4;
+const DRIVE_CAM_DIST_MAX = 80;
+const DRIVE_CAM_PITCH = -0.6; // looking down on the car from above
+const THIRD_PERSON_TARGET_HEIGHT = 0.95;
+const DRIVE_THIRD_PERSON_TARGET_HEIGHT = 1.2;
+const THIRD_PITCH_MIN = -1.45; // looking down from above
 const THIRD_PITCH_MAX = 0.5; // looking up from near the ground
 const MIN_CAMERA_HEIGHT = 0.4;
 
 // The player's own look: red shirt, blue jeans, brown hair.
-const PLAYER_LOOK = { shirt: 0xe53935, pants: 0x1e4fa8, skin: 0xf1c27d, hair: 0x5a3825 };
+const PLAYER_LOOK = { shirt: 0xe53935, pants: 0x1e4fa8, skin: 0xf1c27d, hair: 0x5a3825, hairStyle: 'short' };
+
+const MAX_HEALTH = 100;
+const HEALTH_REGEN_DELAY = 5; // seconds without being hit before healing starts
+const HEALTH_REGEN_RATE = 6; // per second
 
 function buildHandsViewmodel() {
   const group = new THREE.Group();
@@ -81,7 +94,7 @@ class Player {
     this.camera = camera;
     this.position = { x: startLocal.x, z: startLocal.z };
     this.yaw = 0;
-    this.pitch = -0.25;
+    this.pitch = WALK_CAM_PITCH;
     this.driveLookYaw = 0; // look angle *relative to the car's heading* while driving
     this.vehicle = null; // Vehicle instance while driving, else null
     this.viewMode = 'third'; // 'third' (see yourself) or 'first' (through your eyes)
@@ -89,6 +102,15 @@ class Player {
     this.moveDir = { x: 0, z: -1 };
     this.isMoving = false;
     this.walkPhase = 0;
+    this.walkCamDist = WALK_CAM_DIST_DEFAULT;
+    this.driveCamDist = DRIVE_CAM_DIST_DEFAULT;
+
+    this.health = MAX_HEALTH;
+    this.dead = false;
+    this.sinceHit = 999;
+    this.punchAnim = 0;
+    this.onHurt = null; // set by main.js: flashes the screen red
+    this.onDeath = null; // set by main.js: shows the "knocked out" screen
 
     this.avatar = buildPersonMesh(PLAYER_LOOK);
     this.avatarHeading = 0;
@@ -116,9 +138,49 @@ class Player {
     return this.speed * 3.6;
   }
 
+  // Zoom the third-person camera: factor < 1 closer, > 1 further away.
+  // Zooming out from first person switches to third person.
+  zoom(factor) {
+    if (!this.isThirdPerson) {
+      if (factor > 1) this.toggleView();
+      return;
+    }
+    if (this.isDriving) {
+      this.driveCamDist = Math.max(DRIVE_CAM_DIST_MIN, Math.min(DRIVE_CAM_DIST_MAX, this.driveCamDist * factor));
+    } else {
+      this.walkCamDist = Math.max(WALK_CAM_DIST_MIN, Math.min(WALK_CAM_DIST_MAX, this.walkCamDist * factor));
+    }
+  }
+
+  takeDamage(amount) {
+    if (this.dead || this.isDriving) return;
+    this.health = Math.max(0, this.health - amount);
+    this.sinceHit = 0;
+    if (this.onHurt) this.onHurt();
+    if (this.health <= 0) {
+      this.dead = true;
+      this.speed = 0;
+      setKnockedOut(this.avatar, true);
+      if (this.onDeath) this.onDeath();
+    }
+  }
+
+  respawn(startLocal) {
+    this.position = { x: startLocal.x, z: startLocal.z };
+    this.health = MAX_HEALTH;
+    this.dead = false;
+    this.speed = 0;
+    this.sinceHit = 999;
+    setKnockedOut(this.avatar, false);
+  }
+
+  punch() {
+    this.punchAnim = 0.25;
+  }
+
   toggleView() {
     this.viewMode = this.isThirdPerson ? 'first' : 'third';
-    this.pitch = this.isThirdPerson ? -0.25 : 0;
+    this.pitch = this.isThirdPerson ? (this.isDriving ? DRIVE_CAM_PITCH : WALK_CAM_PITCH) : 0;
     this.applyVisibility();
   }
 
@@ -138,7 +200,7 @@ class Player {
     this.vehicle = vehicle;
     this.speed = 0;
     this.driveLookYaw = 0;
-    this.pitch = this.isThirdPerson ? -0.2 : 0;
+    this.pitch = this.isThirdPerson ? DRIVE_CAM_PITCH : 0;
     this.applyVisibility();
   }
 
@@ -152,7 +214,7 @@ class Player {
     // Keep facing wherever you were looking in the car.
     this.yaw = v.heading + this.driveLookYaw;
     this.avatarHeading = v.heading;
-    this.pitch = this.isThirdPerson ? -0.25 : 0;
+    this.pitch = this.isThirdPerson ? WALK_CAM_PITCH : 0;
     this.applyVisibility();
     return v;
   }
@@ -173,6 +235,18 @@ class Player {
   }
 
   updateWalking(dt, keys, buildings) {
+    this.sinceHit += dt;
+    if (!this.dead && this.sinceHit > HEALTH_REGEN_DELAY) {
+      this.health = Math.min(MAX_HEALTH, this.health + HEALTH_REGEN_RATE * dt);
+    }
+    if (this.dead) {
+      // Knocked out: lie there until you respawn.
+      this.speed = 0;
+      animatePerson(this.avatar, 0, 0);
+      this.avatar.group.position.set(this.position.x, 0.08, this.position.z);
+      return;
+    }
+
     const forward = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
     const strafe = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
     this.isMoving = forward !== 0 || strafe !== 0;
@@ -212,6 +286,8 @@ class Player {
     const runAmount = Math.min(1, this.speed / 3);
     this.walkPhase += dt * (3 + this.speed * 0.8);
     animatePerson(this.avatar, this.walkPhase, runAmount);
+    this.punchAnim -= dt;
+    if (this.punchAnim > 0) setPunch(this.avatar);
     const g = this.avatar.group;
     g.position.set(this.position.x, 0, this.position.z);
     g.rotation.y = this.avatarHeading;
@@ -249,7 +325,7 @@ class Player {
       const v = this.vehicle;
       const yaw = v.heading + this.driveLookYaw;
       if (this.isThirdPerson) {
-        this.orbitCamera(v.position.x, v.y + DRIVE_THIRD_PERSON_TARGET_HEIGHT, v.position.z, yaw, DRIVE_THIRD_PERSON_DIST);
+        this.orbitCamera(v.position.x, v.y + DRIVE_THIRD_PERSON_TARGET_HEIGHT, v.position.z, yaw, this.driveCamDist);
         return;
       }
       const fwd = forwardVec(v.heading);
@@ -261,7 +337,7 @@ class Player {
       this.camera.rotation.y = yaw;
       this.camera.rotation.x = this.pitch;
     } else if (this.isThirdPerson) {
-      this.orbitCamera(this.position.x, THIRD_PERSON_TARGET_HEIGHT, this.position.z, this.yaw, THIRD_PERSON_DIST);
+      this.orbitCamera(this.position.x, THIRD_PERSON_TARGET_HEIGHT, this.position.z, this.yaw, this.walkCamDist);
     } else {
       this.camera.position.set(this.position.x, EYE_HEIGHT, this.position.z);
       this.camera.rotation.y = this.yaw;

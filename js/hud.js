@@ -23,6 +23,25 @@ const HUD = {
     this.speedValueEl.textContent = Math.round(kmh);
   },
 
+  updateHealth(hp) {
+    if (!this.healthFillEl) this.healthFillEl = document.getElementById('health-fill');
+    const pct = Math.max(0, Math.min(100, hp));
+    this.healthFillEl.style.width = pct + '%';
+    this.healthFillEl.style.background = pct > 50 ? '#2ecc71' : pct > 25 ? '#f1c40f' : '#e74c3c';
+  },
+
+  // Brief red flash around the screen edges when you get hit.
+  flashHurt() {
+    const el = document.getElementById('hurt-flash');
+    el.classList.add('show');
+    clearTimeout(this.hurtTimer);
+    this.hurtTimer = setTimeout(() => el.classList.remove('show'), 180);
+  },
+
+  showDeath(show) {
+    document.getElementById('death-overlay').classList.toggle('hidden', !show);
+  },
+
   showPrompt(text) {
     this.promptEl.textContent = text;
     this.promptEl.classList.remove('hidden');

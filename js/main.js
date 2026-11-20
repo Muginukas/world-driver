@@ -3,7 +3,7 @@
 // tag in index.html, so `THREE` is available with no callback dance).
 
 const pressedKeys = new Set();
-let renderer, scene, camera, player, traffic, pedestrians;
+let renderer, scene, camera, player, traffic, pedestrians, combat;
 let minimapCamera, playerMarker;
 let ramps = [];
 let buildings = [];
@@ -99,6 +99,9 @@ function initGame() {
   player = new Player(camera, scene, { x: 0, z: 0 });
   traffic = new TrafficManager(scene);
   pedestrians = new PedestrianManager(scene);
+  combat = new CombatManager(scene, player);
+  player.onHurt = () => HUD.flashHurt();
+  player.onDeath = () => HUD.showDeath(true);
 
   playerMarker = buildPlayerMarker();
   scene.add(playerMarker);
@@ -113,7 +116,8 @@ function initGame() {
     ramps = buildRamps(scene, projected);
     buildings = buildWorld(scene, projected, buildKeepClear(parkedLocal, ramps));
     traffic.init(projected, parkedLocal);
-    pedestrians.init(projected);
+    pedestrians.init(buildings);
+    combat.init(buildings);
   });
 
   HUD.init();
@@ -123,6 +127,8 @@ function initGame() {
   bindTouchControls();
   bindLookZone();
   bindMinimapTarget();
+  bindZoom();
+  bindRespawn();
 
   requestAnimationFrame(tick);
 }
@@ -138,6 +144,32 @@ function buildKeepClear(parkedLocal, rampList) {
     }
   });
   return zones;
+}
+
+// Zoom the third-person camera: mouse wheel, or the +/- buttons.
+function bindZoom() {
+  window.addEventListener('wheel', (e) => {
+    player.zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15);
+  }, { passive: true });
+
+  const bindZoomBtn = (id, factor) => {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      player.zoom(factor);
+    }, { passive: false });
+    el.addEventListener('click', () => player.zoom(factor));
+  };
+  bindZoomBtn('btn-zoom-in', 1 / 1.35);
+  bindZoomBtn('btn-zoom-out', 1.35);
+}
+
+function bindRespawn() {
+  document.getElementById('respawn-btn').addEventListener('click', () => {
+    player.respawn({ x: 0, z: 0 });
+    combat.onPlayerRespawn(buildings);
+    HUD.showDeath(false);
+  });
 }
 
 function onResize() {
@@ -314,11 +346,19 @@ function updateDestinationInfo() {
 }
 
 function handleInteract() {
+  if (player.dead) return;
   if (player.isDriving) {
     const vehicle = player.exitVehicle();
     traffic.onVehicleExited(vehicle);
     HUD.setMode(false);
   } else {
+    // A villain right next to you: punch them first.
+    const villain = combat.villainInReach(player.position);
+    if (villain) {
+      player.punch();
+      villain.takeHit(player.position, 1);
+      return;
+    }
     const vehicle = traffic.findEnterable(player.position);
     if (vehicle) {
       player.enterVehicle(vehicle);
@@ -334,6 +374,19 @@ function updatePrompt() {
   if (player.isDriving) {
     HUD.hidePrompt();
     actionBtn.textContent = 'Išlipti';
+    actionBtn.classList.remove('disabled');
+    return;
+  }
+
+  if (player.dead) {
+    HUD.hidePrompt();
+    actionBtn.classList.add('disabled');
+    return;
+  }
+
+  if (combat.villainInReach(player.position)) {
+    HUD.showPrompt('Paspausk E — mušti blogietį!');
+    actionBtn.textContent = 'Mušti';
     actionBtn.classList.remove('disabled');
     return;
   }
@@ -393,7 +446,9 @@ function tick(now) {
   }
 
   const viewerPos = player.isDriving ? player.vehicle.position : player.position;
-  pedestrians.update(dt, player.isDriving ? player.vehicle : null, viewerPos);
+  pedestrians.update(dt, player.isDriving ? player.vehicle : null, viewerPos, buildings);
+  combat.update(dt, { car: player.isDriving ? player.vehicle : null, viewerPos, buildings });
+  HUD.updateHealth(player.health);
 
   player.updateCamera();
   updatePrompt();

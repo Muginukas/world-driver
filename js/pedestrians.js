@@ -1,29 +1,52 @@
-// Blocky "Roblox-style" little people: a shared figure builder (also used
-// for the player's own avatar, see player.js) plus ambient pedestrians
-// strolling the sidewalks of every road and milling around the spawn.
+// Blocky "Roblox-style" little people: a shared figure builder (used for
+// the player, bodyguards and villains too — see player.js, combat.js)
+// plus ambient pedestrians who simply wander wherever they like, around
+// buildings, across roads and squares. Everyone looks different: hair
+// styles, hats, glasses, backpacks, body width, kids and grown-ups.
 // They hop out of the way, arms up, if you drive at them.
 
-const PED_SPEED_MIN = 1.2; // m/s
-const PED_SPEED_MAX = 2.2;
+const PERSON_SCALE = 0.62; // everyone is small next to the buildings
+const PERSON_RADIUS = 0.3; // for building collision
+
+const PED_COUNT = 120;
+const PED_SPEED_MIN = 1.0; // m/s
+const PED_SPEED_MAX = 2.0;
 const PED_JOGGER_SPEED = 3.5;
-const PEDS_PER_SIDEWALK = 8; // per road side
-const PED_WANDERERS = 14; // milling around the spawn point
-const PED_WANDER_RADIUS = 22;
-const PED_VISIBLE_DIST = 160; // beyond this (deep in the fog) they're just hidden
-const PED_DODGE_DIST = 2.8;
+const PED_WANDER_STEP = 30; // each new destination is up to this far away
+const PED_VISIBLE_DIST = 140; // beyond this (deep in the fog) they're hidden and frozen
+const PED_RECYCLE_DIST = 190; // further than this from you -> moved somewhere near you
+const PED_RESPAWN_MIN = 90;
+const PED_RESPAWN_MAX = 140;
+const PED_DODGE_DIST = 2.2;
 const PED_GRAVITY = 18;
 
-const SHIRT_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 0xffffff, 0x34495e, 0xff6fae];
-const PANTS_COLORS = [0x2c3e50, 0x1f3a93, 0x5d4037, 0x212121, 0x607d8b, 0x7f8c8d];
+const SHIRT_COLORS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 0xffffff, 0x34495e, 0xff6fae, 0x00bcd4, 0x8bc34a];
+const PANTS_COLORS = [0x2c3e50, 0x1f3a93, 0x5d4037, 0x212121, 0x607d8b, 0x7f8c8d, 0xc2185b, 0xd7ccc8];
 const SKIN_COLORS = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524];
-const HAIR_COLORS = [0x2b1b0e, 0x5a3825, 0xd6b45a, 0x111111, 0x8b3a1a, 0xb0b0b0];
+const HAIR_COLORS = [0x2b1b0e, 0x5a3825, 0xd6b45a, 0x111111, 0x8b3a1a, 0xb0b0b0, 0xff7043];
+const HAT_COLORS = [0xd32f2f, 0x1976d2, 0x388e3c, 0x212121, 0xfbc02d, 0x6d4c41];
+const HAIR_STYLES = ['short', 'short', 'long', 'long', 'spiky', 'bald'];
+const HAT_STYLES = [null, null, null, null, 'cap', 'cap', 'tophat', 'beanie'];
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function randomPersonLook() {
-  return { shirt: pick(SHIRT_COLORS), pants: pick(PANTS_COLORS), skin: pick(SKIN_COLORS), hair: pick(HAIR_COLORS) };
+  const kid = Math.random() < 0.15;
+  return {
+    shirt: pick(SHIRT_COLORS),
+    pants: pick(PANTS_COLORS),
+    skin: pick(SKIN_COLORS),
+    hair: pick(HAIR_COLORS),
+    hairStyle: pick(HAIR_STYLES),
+    hat: pick(HAT_STYLES),
+    hatColor: pick(HAT_COLORS),
+    glasses: Math.random() < 0.15,
+    backpack: Math.random() < 0.2 ? pick(HAT_COLORS) : null,
+    width: 0.85 + Math.random() * 0.4,
+    scale: kid ? 0.7 : 0.9 + Math.random() * 0.25,
+  };
 }
 
 // Geometries/materials are shared across every figure — only the meshes
@@ -34,34 +57,30 @@ function personMat(color) {
   return personMatCache.get(color);
 }
 
-let personGeos = null;
-function getPersonGeos() {
-  if (personGeos) return personGeos;
-  const leg = new THREE.BoxGeometry(0.24, 0.85, 0.26);
-  leg.translate(0, -0.425, 0); // pivot at the hip
-  const arm = new THREE.BoxGeometry(0.18, 0.62, 0.2);
-  arm.translate(0, -0.31, 0); // pivot at the shoulder
-  personGeos = {
-    leg,
-    arm,
-    hand: new THREE.BoxGeometry(0.17, 0.16, 0.19),
-    torso: new THREE.BoxGeometry(0.62, 0.72, 0.34),
-    head: new THREE.BoxGeometry(0.44, 0.44, 0.44),
-    hair: new THREE.BoxGeometry(0.47, 0.14, 0.47),
-    eye: new THREE.BoxGeometry(0.11, 0.11, 0.03),
-    pupil: new THREE.BoxGeometry(0.055, 0.07, 0.03),
-    mouth: new THREE.BoxGeometry(0.16, 0.035, 0.03),
-  };
-  return personGeos;
+const personGeoCache = new Map();
+function boxGeo(w, h, d, pivotTop = false) {
+  const key = w + ',' + h + ',' + d + ',' + pivotTop;
+  if (!personGeoCache.has(key)) {
+    const g = new THREE.BoxGeometry(w, h, d);
+    if (pivotTop) g.translate(0, -h / 2, 0); // pivot at the top (hip/shoulder)
+    personGeoCache.set(key, g);
+  }
+  return personGeoCache.get(key);
 }
 
 // Builds one figure facing local -Z (same "heading 0" convention as cars,
-// see geo.js), feet at y=0, about 2.1 m tall. Returns the group plus its
-// limbs, so animatePerson can swing them.
+// see geo.js), feet at y=0. Unscaled it's ~2.1 m tall; the group is
+// scaled by PERSON_SCALE * look.scale. Returns the group plus its limbs,
+// so animatePerson can swing them.
+//
+// `look` fields: shirt, pants, skin, hair (colors); optional hairStyle
+// ('short'|'long'|'spiky'|'bald'), hat ('cap'|'tophat'|'beanie'),
+// hatColor, glasses (sunglasses), backpack (color), mask (color, covers
+// the lower face), eyes (pupil color), width (body width factor), scale.
 function buildPersonMesh(look) {
-  const g = getPersonGeos();
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
+  const width = look.width || 1;
 
   const add = (parent, geo, color, x, y, z) => {
     const mesh = new THREE.Mesh(geo, personMat(color));
@@ -70,25 +89,54 @@ function buildPersonMesh(look) {
     return mesh;
   };
 
-  const leftLeg = add(group, g.leg, look.pants, -0.15, 0.85, 0);
-  const rightLeg = add(group, g.leg, look.pants, 0.15, 0.85, 0);
-  add(group, g.torso, look.shirt, 0, 1.21, 0);
+  const legX = 0.15 * width;
+  const leftLeg = add(group, boxGeo(0.24, 0.85, 0.26, true), look.pants, -legX, 0.85, 0);
+  const rightLeg = add(group, boxGeo(0.24, 0.85, 0.26, true), look.pants, legX, 0.85, 0);
+  const torso = add(group, boxGeo(0.62, 0.72, 0.34), look.shirt, 0, 1.21, 0);
+  torso.scale.x = width;
 
-  const leftArm = add(group, g.arm, look.shirt, -0.41, 1.55, 0);
-  const rightArm = add(group, g.arm, look.shirt, 0.41, 1.55, 0);
-  add(leftArm, g.hand, look.skin, 0, -0.68, 0);
-  add(rightArm, g.hand, look.skin, 0, -0.68, 0);
+  const armX = 0.31 * width + 0.1;
+  const leftArm = add(group, boxGeo(0.18, 0.62, 0.2, true), look.shirt, -armX, 1.55, 0);
+  const rightArm = add(group, boxGeo(0.18, 0.62, 0.2, true), look.shirt, armX, 1.55, 0);
+  add(leftArm, boxGeo(0.17, 0.16, 0.19), look.skin, 0, -0.68, 0);
+  add(rightArm, boxGeo(0.17, 0.16, 0.19), look.skin, 0, -0.68, 0);
 
-  add(group, g.head, look.skin, 0, 1.79, 0);
-  add(group, g.hair, look.hair, 0, 2.04, 0);
+  add(group, boxGeo(0.44, 0.44, 0.44), look.skin, 0, 1.79, 0);
+
+  // Hair
+  const style = look.hairStyle || 'short';
+  if (style !== 'bald') add(group, boxGeo(0.47, 0.14, 0.47), look.hair, 0, 2.04, 0);
+  if (style === 'long') add(group, boxGeo(0.47, 0.55, 0.1), look.hair, 0, 1.78, 0.22);
+  if (style === 'spiky') {
+    [-0.14, 0, 0.14].forEach((x) => add(group, boxGeo(0.1, 0.14, 0.1), look.hair, x, 2.17, 0));
+  }
+
+  // Hat
+  if (look.hat === 'cap') {
+    add(group, boxGeo(0.49, 0.14, 0.49), look.hatColor, 0, 2.08, 0);
+    add(group, boxGeo(0.46, 0.04, 0.22), look.hatColor, 0, 2.03, -0.33);
+  } else if (look.hat === 'tophat') {
+    add(group, boxGeo(0.58, 0.04, 0.58), look.hatColor, 0, 2.06, 0);
+    add(group, boxGeo(0.38, 0.42, 0.38), look.hatColor, 0, 2.29, 0);
+  } else if (look.hat === 'beanie') {
+    add(group, boxGeo(0.49, 0.22, 0.49), look.hatColor, 0, 2.08, 0);
+  }
 
   // Face on the -Z (front) side of the head: eye whites, pupils, mouth.
-  add(group, g.eye, 0xffffff, -0.1, 1.85, -0.215);
-  add(group, g.eye, 0xffffff, 0.1, 1.85, -0.215);
-  add(group, g.pupil, 0x111111, -0.1, 1.84, -0.232);
-  add(group, g.pupil, 0x111111, 0.1, 1.84, -0.232);
-  add(group, g.mouth, 0x7a2e2e, 0, 1.7, -0.222);
+  add(group, boxGeo(0.11, 0.11, 0.03), 0xffffff, -0.1, 1.85, -0.215);
+  add(group, boxGeo(0.11, 0.11, 0.03), 0xffffff, 0.1, 1.85, -0.215);
+  add(group, boxGeo(0.055, 0.07, 0.03), look.eyes || 0x111111, -0.1, 1.84, -0.232);
+  add(group, boxGeo(0.055, 0.07, 0.03), look.eyes || 0x111111, 0.1, 1.84, -0.232);
+  if (look.glasses) add(group, boxGeo(0.42, 0.1, 0.03), 0x111111, 0, 1.85, -0.24);
+  if (look.mask) {
+    add(group, boxGeo(0.46, 0.17, 0.46), look.mask, 0, 1.69, 0);
+  } else {
+    add(group, boxGeo(0.16, 0.035, 0.03), 0x7a2e2e, 0, 1.7, -0.222);
+  }
 
+  if (look.backpack) add(group, boxGeo(0.46, 0.5, 0.2), look.backpack, 0, 1.24, 0.27);
+
+  group.scale.setScalar(PERSON_SCALE * (look.scale || 1));
   return { group, leftArm, rightArm, leftLeg, rightLeg };
 }
 
@@ -108,15 +156,53 @@ function setArmsUp(p, up) {
   p.rightArm.rotation.z = up ? 2.6 : 0;
 }
 
-// A copy of `path` shifted sideways by `offset` metres (positive = to the
-// right of the direction of travel) — i.e. a sidewalk alongside a road.
-function offsetPath(path, offset) {
-  return path.map((p, i) => {
-    const prev = path[Math.max(0, i - 1)];
-    const next = path[Math.min(path.length - 1, i + 1)];
-    const r = rightVec(headingTo(prev, next));
-    return { x: p.x + r.x * offset, z: p.z + r.z * offset };
-  });
+// Right arm thrust straight forward — a punch.
+function setPunch(p) {
+  p.rightArm.rotation.x = -1.6;
+}
+
+// Lying flat on their back (knocked out) or standing up again.
+function setKnockedOut(p, down) {
+  p.group.rotation.x = down ? Math.PI / 2 : 0;
+}
+
+// Moves `pos` toward `target` at `speed`, sliding along buildings instead
+// of passing through them. Returns { arrived, blocked, heading }.
+function stepToward(pos, target, speed, dt, buildings, radius = PERSON_RADIUS) {
+  const dx = target.x - pos.x;
+  const dz = target.z - pos.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 0.05) return { arrived: true, blocked: false, heading: null };
+  const step = Math.min(dist, speed * dt);
+  const sx = (dx / dist) * step;
+  const sz = (dz / dist) * step;
+  let moved = false;
+  if (!collidesWithBuilding(pos.x + sx, pos.z, buildings, radius)) {
+    pos.x += sx;
+    moved = true;
+  }
+  if (!collidesWithBuilding(pos.x, pos.z + sz, buildings, radius)) {
+    pos.z += sz;
+    moved = true;
+  }
+  return {
+    arrived: Math.hypot(target.x - pos.x, target.z - pos.z) < 0.2,
+    blocked: !moved,
+    heading: Math.atan2(-dx, -dz),
+  };
+}
+
+// A random spot between minR and maxR from `center` that isn't inside a
+// building, or null if none was found in a few tries.
+function findFreeSpot(center, minR, maxR, buildings) {
+  for (let i = 0; i < 12; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = minR + Math.random() * (maxR - minR);
+    const x = center.x + Math.cos(a) * r;
+    const z = center.z + Math.sin(a) * r;
+    if (!collidesWithBuilding(x, z, buildings, 0.8)) return { x, z };
+  }
+  return null;
 }
 
 class Pedestrian {
@@ -130,53 +216,30 @@ class Pedestrian {
     this.y = 0;
     this.vy = 0;
     this.dodge = { x: 0, z: 0 };
-
-    // Either follows a sidewalk path back and forth...
-    this.path = null;
-    this.index = 0;
-    this.dir = 1;
-    // ...or wanders between random points around `home`.
-    this.home = null;
     this.target = null;
-    this.pause = 0;
+    this.pause = Math.random() * 2;
   }
 
-  setPath(path, startIndex, dir) {
-    this.path = path;
-    this.index = startIndex;
-    this.dir = dir;
-    this.position = { x: path[startIndex].x, z: path[startIndex].z };
+  pickTarget(buildings) {
+    this.target = findFreeSpot(this.position, 4, PED_WANDER_STEP, buildings);
+    if (!this.target) this.pause = 1;
   }
 
-  setWander(home) {
-    this.home = home;
-    this.pickWanderTarget();
-    this.position = { x: this.target.x, z: this.target.z };
-    this.pickWanderTarget();
-  }
-
-  pickWanderTarget() {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * PED_WANDER_RADIUS;
-    this.target = { x: this.home.x + Math.cos(a) * r, z: this.home.z + Math.sin(a) * r };
-  }
-
-  currentTarget() {
-    if (this.path) {
-      let t = this.path[this.index + this.dir];
-      if (!t) {
-        this.dir *= -1;
-        t = this.path[this.index + this.dir];
-      }
-      return t;
-    }
-    return this.target;
-  }
-
-  update(dt, car, viewer) {
+  update(dt, car, viewer, buildings) {
     const group = this.figure.group;
+
+    const fromViewer = dist2D(this.position, viewer);
+    if (fromViewer > PED_RECYCLE_DIST) {
+      // Wandered off (or you drove away): pop back in somewhere around you,
+      // out in the fog, so the streets near you always have people.
+      const spot = findFreeSpot(viewer, PED_RESPAWN_MIN, PED_RESPAWN_MAX, buildings);
+      if (spot) {
+        this.position = spot;
+        this.target = null;
+      }
+    }
     group.visible = dist2D(this.position, viewer) < PED_VISIBLE_DIST;
-    if (!group.visible) return; // far away: freeze in place, saves work
+    if (!group.visible) return;
 
     // Jump out of the way of a car coming at you.
     if (car && car.speedKmh > 3 && this.y === 0 && dist2D(this.position, car.position) < PED_DODGE_DIST) {
@@ -203,31 +266,20 @@ class Pedestrian {
       this.pause -= dt;
       animatePerson(this.figure, 0, 0);
     } else {
-      const target = this.currentTarget();
-      if (target) {
-        const dx = target.x - this.position.x;
-        const dz = target.z - this.position.z;
-        const dist = Math.hypot(dx, dz);
-        const step = this.speed * dt;
-        if (dist > 0.01) this.heading = headingTo(this.position, target);
-        if (step >= dist) {
-          this.position = { x: target.x, z: target.z };
-          if (this.path) {
-            this.index += this.dir;
-          } else {
-            this.pickWanderTarget();
-            if (Math.random() < 0.4) this.pause = 1 + Math.random() * 3; // stop and look around
-          }
-        } else {
-          this.position.x += (dx / dist) * step;
-          this.position.z += (dz / dist) * step;
+      if (!this.target) this.pickTarget(buildings);
+      if (this.target) {
+        const res = stepToward(this.position, this.target, this.speed, dt, buildings);
+        if (res.heading !== null) this.heading = res.heading;
+        if (res.arrived || res.blocked) {
+          this.target = null;
+          if (Math.random() < 0.4) this.pause = 1 + Math.random() * 3; // stop and look around
         }
         this.phase += dt * (3 + this.speed * 2.2);
         animatePerson(this.figure, this.phase, Math.min(1, this.speed / 2));
       }
     }
 
-    group.position.set(this.position.x, SIDEWALK_TOP + this.y, this.position.z);
+    group.position.set(this.position.x, this.y, this.position.z);
     group.rotation.y = this.heading;
   }
 }
@@ -238,30 +290,16 @@ class PedestrianManager {
     this.people = [];
   }
 
-  init(projectedRoutes) {
-    for (const path of projectedRoutes) {
-      if (!path || path.length < 2) continue;
-      for (const side of [1, -1]) {
-        const sidewalk = offsetPath(path, SIDEWALK_OFFSET * side);
-        for (let i = 0; i < PEDS_PER_SIDEWALK; i++) {
-          const ped = new Pedestrian(this.scene, sidewalk[0]);
-          const start = Math.floor(Math.random() * (sidewalk.length - 1));
-          ped.setPath(sidewalk, start, Math.random() < 0.5 ? 1 : -1);
-          this.people.push(ped);
-        }
-      }
-    }
-
-    for (let i = 0; i < PED_WANDERERS; i++) {
-      const ped = new Pedestrian(this.scene, { x: 0, z: 0 });
-      ped.setWander({ x: 0, z: 0 });
-      this.people.push(ped);
+  init(buildings) {
+    for (let i = 0; i < PED_COUNT; i++) {
+      const spot = findFreeSpot({ x: 0, z: 0 }, 5, 150, buildings) || { x: 0, z: 0 };
+      this.people.push(new Pedestrian(this.scene, spot));
     }
   }
 
   // `car` is the player's car while driving (pedestrians dodge it), and
-  // `viewer` is where the player is (to hide far-away people).
-  update(dt, car, viewer) {
-    for (const p of this.people) p.update(dt, car, viewer);
+  // `viewer` is where the player is (to hide/recycle far-away people).
+  update(dt, car, viewer, buildings) {
+    for (const p of this.people) p.update(dt, car, viewer, buildings);
   }
 }

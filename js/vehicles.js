@@ -26,7 +26,9 @@ const CAR_COLLISION_RADIUS = 1.6; // rough car half-size, for simple circle-vs-b
 // through a building, and (with a smaller radius) to stop the player
 // walking through walls.
 function collidesWithBuilding(x, z, buildings, radius = CAR_COLLISION_RADIUS) {
-  for (const b of buildings) {
+  if (!buildings) return false;
+  const list = buildings.near ? buildings.near(x, z) : buildings; // spatial index (world.js) or plain array
+  for (const b of list) {
     const dx = x - b.x;
     const dz = z - b.z;
     const cos = Math.cos(b.rotY);
