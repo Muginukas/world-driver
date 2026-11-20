@@ -14,8 +14,8 @@ const HUD = {
     this.modeLabelEl = document.getElementById('mode-label');
   },
 
+  // The speedometer stays visible on foot too — you can run 50 km/h.
   setMode(isDriving) {
-    this.driveHudEl.classList.toggle('hidden', !isDriving);
     this.modeLabelEl.textContent = isDriving ? 'Vairavimas' : 'Vaikščiojimas';
   },
 

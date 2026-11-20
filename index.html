@@ -19,8 +19,8 @@
 <!-- Windshield/cabin frame vignette, shown only while driving -->
 <div id="cockpit-frame" class="hidden"></div>
 
-<!-- Driving HUD -->
-<div id="drive-hud" class="hidden">
+<!-- Speedometer (on foot and driving) -->
+<div id="drive-hud">
   <div id="speedometer"><span id="speed-value">0</span> km/h</div>
 </div>
 
@@ -49,18 +49,20 @@
     <button id="btn-down" class="dpad-btn dpad-down" aria-label="Atgal">▼</button>
   </div>
   <button id="btn-action" aria-label="Veiksmas">E</button>
+  <button id="btn-view" aria-label="Keisti vaizdą">👁</button>
 </div>
 
 <!-- Intro overlay -->
 <div id="setup-overlay">
   <div class="setup-box">
     <h1>World Driver</h1>
-    <p>Tikras 3D pirmo asmens žaidimas Vilniaus gatvėse — blokinė, "Roblox"
+    <p>Tikras 3D žaidimas Vilniaus gatvėse — blokinė, "Roblox"
        stiliaus grafika ant realaus miesto gatvių tinklo.</p>
-    <p>Vaikščiok, priėjęs prie bet kurios mašinos paspausk veiksmo mygtuką ir vairuok —
-       mieste nuolat važinėja eismas.</p>
-    <p><b>Kompiuteryje:</b> WASD — judėti, pelė (spausk žemėlapį) — žvilgsnis, rodyklės — žvilgsnis, E — įlipti/išlipti<br>
-       <b>Telefone:</b> rodyklių mygtukai kairėje — judėti, brauk pirštu ekrane — žvilgsnis, mygtukas dešinėje — įlipti/išlipti</p>
+    <p>Tu esi žmogeliukas — matai save iš už nugaros. Bėgti gali iki 50 km/h, kaip mašina.
+       Priėjęs prie bet kurios mašinos paspausk veiksmo mygtuką ir vairuok —
+       gatvėmis važinėja eismas, šaligatviais vaikšto žmonės.</p>
+    <p><b>Kompiuteryje:</b> WASD — judėti, pelė (spausk ekraną) — žvilgsnis, rodyklės — žvilgsnis, E — įlipti/išlipti, V — vaizdas iš akių / iš už nugaros<br>
+       <b>Telefone:</b> rodyklių mygtukai kairėje — judėti, brauk pirštu ekrane — žvilgsnis, mygtukas dešinėje — įlipti/išlipti, 👁 — keisti vaizdą</p>
     <button id="start-btn">Žaisti</button>
   </div>
 </div>
@@ -71,6 +73,7 @@
 <script src="js/world.js"></script>
 <script src="js/ramps.js"></script>
 <script src="js/vehicles.js"></script>
+<script src="js/pedestrians.js"></script>
 <script src="js/player.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/main.js"></script>

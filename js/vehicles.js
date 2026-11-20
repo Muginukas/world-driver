@@ -23,8 +23,9 @@ const CAR_COLLISION_RADIUS = 1.6; // rough car half-size, for simple circle-vs-b
 // world.js) — each building is an axis-aligned box in its own rotated
 // local frame, so the point is rotated into that frame before the box
 // test. Used to stop a driven car dead instead of letting it drive
-// through a building.
-function collidesWithBuilding(x, z, buildings) {
+// through a building, and (with a smaller radius) to stop the player
+// walking through walls.
+function collidesWithBuilding(x, z, buildings, radius = CAR_COLLISION_RADIUS) {
   for (const b of buildings) {
     const dx = x - b.x;
     const dz = z - b.z;
@@ -32,7 +33,7 @@ function collidesWithBuilding(x, z, buildings) {
     const sin = Math.sin(b.rotY);
     const localX = dx * cos - dz * sin;
     const localZ = dx * sin + dz * cos;
-    if (Math.abs(localX) <= b.hw + CAR_COLLISION_RADIUS && Math.abs(localZ) <= b.hd + CAR_COLLISION_RADIUS) {
+    if (Math.abs(localX) <= b.hw + radius && Math.abs(localZ) <= b.hd + radius) {
       return true;
     }
   }

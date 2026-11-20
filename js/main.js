@@ -3,7 +3,7 @@
 // tag in index.html, so `THREE` is available with no callback dance).
 
 const pressedKeys = new Set();
-let renderer, scene, camera, player, traffic;
+let renderer, scene, camera, player, traffic, pedestrians;
 let minimapCamera, playerMarker;
 let ramps = [];
 let buildings = [];
@@ -77,6 +77,9 @@ function buildDestinationMarker() {
 function initGame() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(WALK_FOV, window.innerWidth / window.innerHeight, 0.1, 400);
+  // The camera must be in the scene for its children (first-person hands,
+  // car dashboard — see player.js) to be rendered.
+  scene.add(camera);
 
   minimapCamera = new THREE.OrthographicCamera(
     -MINIMAP_VIEW_HALF, MINIMAP_VIEW_HALF, MINIMAP_VIEW_HALF, -MINIMAP_VIEW_HALF, 1, 500
@@ -93,8 +96,9 @@ function initGame() {
 
   window.addEventListener('resize', onResize);
 
-  player = new Player(camera, { x: 0, z: 0 });
+  player = new Player(camera, scene, { x: 0, z: 0 });
   traffic = new TrafficManager(scene);
+  pedestrians = new PedestrianManager(scene);
 
   playerMarker = buildPlayerMarker();
   scene.add(playerMarker);
@@ -105,10 +109,11 @@ function initGame() {
 
   resolveTrafficRoutes((latLngPaths) => {
     const projected = latLngPaths.map((path) => path.map((p) => toLocal(START_POSITION, p)));
-    buildings = buildWorld(scene, projected);
     const parkedLocal = PARKED_CARS.map((p) => toLocal(START_POSITION, p));
-    traffic.init(projected, parkedLocal);
     ramps = buildRamps(scene, projected);
+    buildings = buildWorld(scene, projected, buildKeepClear(parkedLocal, ramps));
+    traffic.init(projected, parkedLocal);
+    pedestrians.init(projected);
   });
 
   HUD.init();
@@ -122,6 +127,19 @@ function initGame() {
   requestAnimationFrame(tick);
 }
 
+// Spots where no building may go: the spawn, the parked cars, and each
+// ramp's whole run (approach lane, slope, and landing zone past the top).
+function buildKeepClear(parkedLocal, rampList) {
+  const zones = [{ x: 0, z: 0, r: 14 }];
+  parkedLocal.forEach((p) => zones.push({ x: p.x, z: p.z, r: 12 }));
+  rampList.forEach((ramp) => {
+    for (let t = -16; t <= 26; t += 4) {
+      zones.push({ x: ramp.position.x + ramp.forward.x * t, z: ramp.position.z + ramp.forward.z * t, r: 6 });
+    }
+  });
+  return zones;
+}
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -133,6 +151,10 @@ function bindInput() {
     const key = e.key.toLowerCase();
     if (key === 'e') {
       if (!e.repeat) handleInteract();
+      return;
+    }
+    if (key === 'v') {
+      if (!e.repeat) player.toggleView();
       return;
     }
     pressedKeys.add(key);
@@ -193,6 +215,13 @@ function bindTouchControls() {
     handleInteract();
   }, { passive: false });
   actionBtn.addEventListener('click', () => handleInteract());
+
+  const viewBtn = document.getElementById('btn-view');
+  viewBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    player.toggleView();
+  }, { passive: false });
+  viewBtn.addEventListener('click', () => player.toggleView());
 }
 
 // Touch-drag anywhere on screen looks around (like mouse-look on
@@ -285,24 +314,16 @@ function updateDestinationInfo() {
 }
 
 function handleInteract() {
-  const cockpitFrame = document.getElementById('cockpit-frame');
-
   if (player.isDriving) {
     const vehicle = player.exitVehicle();
     traffic.onVehicleExited(vehicle);
     HUD.setMode(false);
-    cockpitFrame.classList.add('hidden');
-    camera.fov = WALK_FOV;
-    camera.updateProjectionMatrix();
   } else {
     const vehicle = traffic.findEnterable(player.position);
     if (vehicle) {
       player.enterVehicle(vehicle);
       traffic.onVehicleEntered(vehicle);
       HUD.setMode(true);
-      cockpitFrame.classList.remove('hidden');
-      camera.fov = DRIVE_FOV;
-      camera.updateProjectionMatrix();
     }
   }
 }
@@ -363,9 +384,16 @@ function tick(now) {
     camera.fov = DRIVE_FOV + speedFraction * 35;
     camera.updateProjectionMatrix();
   } else {
-    player.updateWalking(dt, pressedKeys);
+    player.updateWalking(dt, pressedKeys, buildings);
     traffic.update(dt, null);
+    HUD.updateSpeed(player.speedKmh);
+    // Same speed-FOV kick on foot — running 50 km/h should feel fast too.
+    camera.fov = WALK_FOV + Math.min(1, player.speedKmh / 50) * 20;
+    camera.updateProjectionMatrix();
   }
+
+  const viewerPos = player.isDriving ? player.vehicle.position : player.position;
+  pedestrians.update(dt, player.isDriving ? player.vehicle : null, viewerPos);
 
   player.updateCamera();
   updatePrompt();
